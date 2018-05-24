@@ -282,8 +282,7 @@ $ strings itunesstored2.sqlitedb
  
 于是乎，我们就清晰的得到了iPhone /iPad 设备上都安装了哪些app ：
 
-
-![](./images/4196_140211110054_1.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211110054_1.png)
 
 
 ### <a name="markdown-af03"></a>iOS安全攻防（三）：使用Reveal分析他人app
@@ -329,7 +328,7 @@ b.也可以重启设备
 
 然后就可以到Reveal看看别人的app怎么布局的了，苹果的appstore：
 
-![](./images/4196_140211110450_1.jpg)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211110450_1.jpg)
 
 
 ### <a name="markdown-af04"></a>iOS安全攻防（四）：阻止GDB依附
@@ -466,7 +465,7 @@ cy#
 
 ```
 
-![](./images/4196_140211111114_2.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211111114_2.png)
 
  当然，只是修改个背景色好没意思……   
  
@@ -761,7 +760,7 @@ iOS7越狱后的Cydia源里已经下载不到Clutch了，但是我们可以从�
 
 
 
-![](./images/4196_140211112011_1.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211112011_1.png)
 
 
 支付宝手势密码解锁有尝试次数限制，连续错5次就要重新登录。
@@ -1142,7 +1141,7 @@ md5方法：
 于是，我反汇编了支付宝app，找到手势密码解锁的相关代码片段：
 
 
-![](./images/223.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/223.png)
 
 
 
@@ -1159,7 +1158,7 @@ md5方法：
 得到结果：
 
 
-![](./images/224.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/224.png)
 
 
 nm Portal | grep -i getpassword  
@@ -1169,7 +1168,7 @@ nm Portal | grep -i getpassword
 得到结果：
 
 
-![](./images/225.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/225.png)
 
 
 确定了了关键函数的输出符号。
@@ -1182,14 +1181,14 @@ nm Portal | grep -i getpassword
 
 在上述两个函数位置设置断点：
 
-![](./images/226.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/226.png)
 
 可以通过info breakpoints 查看断点：
 
-![](./images/227.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/227.png)
 continue到 getPassword 位置，打印函数栈：
 
-![](./images/228.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/228.png)
 我们可以确定了 getPassword 的返回地址是 0x00becb36 ,  对该地址加断点：
 
     b * 0xbecb36   
@@ -1201,7 +1200,7 @@ continue到 getPassword 位置，打印函数栈：
 从上面的反汇编代码，我们可以知道，用户输入的密码为存在r8上，原始密码为存在r0上，我们直接打印出这两个寄存器的值：
 
 
- ![](./images/230.png)
+ ![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/230.png)
 
 正确密码是个“Z”手势图画，而当前输入为“一”手势图画。
 
@@ -1568,7 +1567,7 @@ brew install doxygen graphviz
 通过index.html我们可以直观的查看到 Strings analysis ， ViewControllers，Classes 等几大类的信息。
 
 
-![](./images/231.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/231.png)
 
 
 在Classes->Class Hierarchy 可以查看到类继承图示。
@@ -1578,7 +1577,7 @@ brew install doxygen graphviz
 支付宝app class Hierarchy 结果冰山一角：
 
 
-![](./images/232.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/232.png)
 
 
 ### <a name="markdown-af16"></a>iOS安全攻防（十六）：使用introspy追踪分析应用程序
@@ -1612,14 +1611,14 @@ brew install doxygen graphviz
 
 
 
-![](./images/4196_140211125109_1.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211125109_1.png)
 
 在Introspy-Apps中选择要跟踪的app名称。
 
 Instrospy-Settings则提供一些常规跟踪设置选项，默认是全部开启。
 
 
-![](./images/233.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/233.png)
 
 
 然后启动想要跟踪的应用程序，就可以直接查看log获取Instrospy为我们跟踪捕获的信息，这里以跟踪支付宝app为例。
@@ -1664,7 +1663,7 @@ Introspy-Analyzer [下载地址传送门](https://github.com/iSECPartners/Intros
 
 举个例子，选择Crypto可以查看支付宝app采取了什么加密措施，如果你看过我之前的文章，一定会一眼就认出来手势密码的：
 
-![](./images/4196_140211125248_1.jpg)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/4196_140211125248_1.jpg)
 
 
 ### <a name="markdown-af17"></a>iOS安全攻防（十七）：Fishhook
@@ -1690,7 +1689,7 @@ fishhook的原理
 dyld链接2种符号，lazy和non-lazy，fishhook可以重新链接/替换本地符号。
 
 
-![](./images/234.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/234.png)
 
 
 如图所示，__DATA区有两个section和动态符号链接相关：__nl_symbol_ptr 、__la_symbol_ptr。__nl_symbol_ptr为一个指针数组，直接对应non-lazy绑定数据。__la_symbol_ptr也是一个指针数组，通过dyld_stub_binder辅助链接。<mach-o/loader.h>的section头提供符号表的偏移量。
@@ -2089,7 +2088,7 @@ iOS7相比之前版本的系统而言，升级了沙盒机制，封锁了几乎�
 
 
 
-![](./images/235.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/235.png)
 
 函数名虽然面目全非，但是基本操作还是清晰的。
 
@@ -2240,7 +2239,7 @@ mv confuse.sh your_proj_path/
 3.配置Build Phase
 在工程Build Phase中添加执行脚本操作，执行confuse.sh脚本，如图：
 
-![](./images/236.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/236.png)
 
 4.创建函数名列表func.list，写入待混淆的函数名，如:
 -(void)sample;
@@ -2262,7 +2261,7 @@ mv func.list your_proj_path/
 5.编译查看结果
 直接build，混淆脚本会在编译前运行，进行字符随机替换，并且每次build的随机字符不同，如图：
 
-![](./images/237.png)
+![](https://raw.githubusercontent.com/kingly09/KYSecurityDefense/master/images/237.png)
 
 
 ### <a name="markdown-af24"></a>iOS安全攻防（二十四）：敏感逻辑的保护方案
