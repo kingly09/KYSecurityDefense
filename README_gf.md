@@ -25,6 +25,7 @@
 * [iOS安全攻防（十五）：使用iNalyzer分析应用程序](#markdown-af15) 
 * [iOS安全攻防（十六）：使用introspy追踪分析应用程序](#markdown-af16)
 * [iOS安全攻防（十七）：Fishhook](#markdown-af17)
+* [iOS安全攻防（十九）：基于脚本实现动态库注入](#markdown-af19)
 
 
 
@@ -1797,3 +1798,93 @@ fishhook替换Core Foundation函数的例子
 
 
 不得不说，facebook忒NB。
+
+
+### <a name="markdown-af19"></a>iOS安全攻防（十九）：基于脚本实现动态库注入
+
+
+MobileSubstrate可以帮助我们加载自己的动态库，于是开发者们谨慎的采取了对MobileSubstrate的检索和防御措施。
+
+那么，除了依靠MobileSubstrate帮忙注入dylib，还有别的攻击入口吗？
+
+
+理理思路，条件、目的很明确：
+1）必须在应用程序启动之前，把dylib的环境变量配置好
+2）dylib的位置必须能被应用程序放问到
+3）最后再启动应用程序
+
+
+
+啊哈，原汁原味，走bash！
+
+
+在点击应用程序图标-->程序启动这个过程中，在我们看来程序是被动执行的。为了让特定功能的脚本被执行，我们可以把脚本改成应用程序二进制的名字伪装成应用程序，让系统调用启动。在脚本中，配置好dylib，然后再手动启动真的应用程序，假装什么也没发生，挥一挥衣袖不带走一片云彩～
+
+将真的支付宝程序改名为oriPortal：
+[plain] view plain copy
+
+    mv Portal oriPortal  
+
+
+将待执行的脚本改名为支付宝：
+[plain] view plain copy
+
+    mv Portal.sh Portal  
+
+
+
+
+脚本代码：
+
+[plain] view plain copy
+
+    #!/bin/bash  
+      
+    #得到第一个参数  
+    C=$0  
+      
+    #第一个参数是二进制的绝对路径 比如 :  
+    #/private/var/mobile/Applications/4763A8A5-2E1D-4DC2-8376-6CB7A8B98728/Portal.app/  
+    #截取最后一个 / 之前的内容  
+    C=${C%/*}  
+      
+    #库和二进制放在一起  
+    export DYLD_INSERT_LIBRARIES=${C:-.}/wq.dylib  
+    #执行原来APP $@ 别忘了把原来的参数保留  
+    exec "${C:-.}"/oriPortal "$@"  
+
+
+
+结果不尽人意，失败了……
+
+错误信息如下：
+
+
+
+在打开某个加密信息时出了错误，大概猜一下应该是类似加密签名校验的步骤，但是我们无法去了解其中详细的操作到底是什么样的，没关系，那么就把原始的可执行文件环境全部给他造出来，因为检验文件属性肯定不会带着路径信息的。
+
+备份一份Portal.app目录Portal_ori.app，修改脚本为：
+
+[plain] view plain copy
+
+    #!/bin/bash  
+    C=$0  
+    C=${C%/*}  
+    export DYLD_INSERT_LIBRARIES=${C:-.}/wq.dylib  
+    exec "${C:-.}"/../Portal_ori.app/Portal "$@"  
+
+
+运行支付宝app验证一下，
+好消息是，在iOS6上，成功加载了动态库wq.dylib
+坏消息是，在iOS7上，失败了，错误信息如下：
+
+
+
+应该是因为iOS7的沙盒机制升了级，把我们这套小把戏拦在门外了……
+那又怎么样，面包总会有的～
+
+
+
+
+
+
