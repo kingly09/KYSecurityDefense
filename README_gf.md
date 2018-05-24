@@ -28,6 +28,7 @@
 * [iOS安全攻防（十九）：基于脚本实现动态库注入](#markdown-af19)
 * [iOS安全攻防（二十）：越狱检测的攻与防](#markdown-af20)
 * [iOS安全攻防（二十二）：static和被裁的符号表](#markdown-af22)
+* [iOS安全攻防（二十三）：Objective-C代码混淆](#markdown-af23)
 
 
 
@@ -2111,7 +2112,152 @@ iOS7相比之前版本的系统而言，升级了沙盒机制，封锁了几乎�
 
 
 
+### <a name="markdown-af23"></a>iOS安全攻防（二十三）：Objective-C代码混淆
+
+
+class-dump可以很方便的导出程序头文件，不仅让攻击者了解了程序结构方便逆向，还让着急赶进度时写出的欠完善的程序给同行留下笑柄。
+
+所以，我们迫切的希望混淆自己的代码。
+
+
+混淆的常规思路
+
+
+混淆分许多思路，比如：
+1）花代码花指令，即随意往程序中加入迷惑人的代码指令
+
+2）易读字符替换
+
+等等
+防止class-dump出可读信息的有效办法是易读字符替换。
 
 
 
 
+Objective-C的方法名混淆
+
+
+混淆的时机
+我们希望在开发时一直保留清晰可读的程序代码，方便自己。
+
+同时，希望编译出来的二进制包含乱七八糟的混淆后的程序代码，恶心他人。
+
+因此，我们可以在Build Phrase 中设定在编译之前进行方法名的字符串替换。
+
+
+混淆的方法
+方法名混淆其实就是字符串替换，有2个方法可以，一个是#define，一个是利用tops。
+利用#define的方法有一个好处，就是可以把混淆结果合并在一个.h中，在工程Prefix.pch的最前面#import这个.h。不导入也可以编译、导入则实现混淆。
+
+单段的selector，如func: ，可以通过#define func 来实现字符串替换。
+多段的selector，如a:b:c: ，可以通过分别#define a 、b、c 来实现字符串替换。
+
+
+
+
+我的混淆工具
+
+我写了个简易的混淆脚本，主要思路是把敏感方法名集中写在一个名叫func.list的文件中，逐一#define成随机字符，追加写入.h。
+
+脚本如下：
+
+[plain] view plain copy
+
+    #!/usr/bin/env bash  
+      
+    TABLENAME=symbols  
+    SYMBOL_DB_FILE="symbols"  
+    STRING_SYMBOL_FILE="func.list"  
+    HEAD_FILE="$PROJECT_DIR/$PROJECT_NAME/codeObfuscation.h"  
+    export LC_CTYPE=C  
+      
+    #维护数据库方便日后作排重  
+    createTable()  
+    {  
+        echo "create table $TABLENAME(src text, des text);" | sqlite3 $SYMBOL_DB_FILE  
+    }  
+      
+    insertValue()  
+    {  
+        echo "insert into $TABLENAME values('$1' ,'$2');" | sqlite3 $SYMBOL_DB_FILE  
+    }  
+      
+    query()  
+    {  
+        echo "select * from $TABLENAME where src='$1';" | sqlite3 $SYMBOL_DB_FILE  
+    }  
+      
+    ramdomString()  
+    {  
+        openssl rand -base64 64 | tr -cd 'a-zA-Z' |head -c 16  
+    }  
+      
+    rm -f $SYMBOL_DB_FILE  
+    rm -f $HEAD_FILE  
+    createTable  
+      
+    touch $HEAD_FILE  
+    echo '#ifndef Demo_codeObfuscation_h  
+    #define Demo_codeObfuscation_h' >> $HEAD_FILE  
+    echo "//confuse string at `date`" >> $HEAD_FILE  
+    cat "$STRING_SYMBOL_FILE" | while read -ra line; do  
+        if [[ ! -z "$line" ]]; then  
+            ramdom=`ramdomString`  
+            echo $line $ramdom  
+            insertValue $line $ramdom  
+            echo "#define $line $ramdom" >> $HEAD_FILE  
+        fi  
+    done  
+    echo "#endif" >> $HEAD_FILE  
+      
+      
+    sqlite3 $SYMBOL_DB_FILE .dump  
+
+
+
+操作步骤
+
+
+1.将混淆脚本confuse.sh放到工程目录下 
+mv confuse.sh your_proj_path/
+
+
+2.修改Prefix.pch
+打开Xcode，修改XXX-Prefix.ch ，添加混淆头文件:
+[objc] view plain copy
+
+    #ifdef __OBJC__  
+        #import <UIKit/UIKit.h>  
+        #import <Foundation/Foundation.h>  
+        //添加混淆作用的头文件（这个文件名是脚本confuse.sh中定义的）  
+        #import "codeObfuscation.h"  
+    #endif  
+
+
+
+3.配置Build Phase
+在工程Build Phase中添加执行脚本操作，执行confuse.sh脚本，如图：
+
+![](./images/236.png)
+
+4.创建函数名列表func.list，写入待混淆的函数名，如:
+-(void)sample;
+-(void)seg1:(NSString *)string seg2:(NSUInteger)num;
+
+
+就这样写：
+sample
+seg1
+seg2
+
+
+并将文件放置于与confuse.sh脚本同级
+mv func.list your_proj_path/
+
+
+
+
+5.编译查看结果
+直接build，混淆脚本会在编译前运行，进行字符随机替换，并且每次build的随机字符不同，如图：
+
+![](./images/237.png)
