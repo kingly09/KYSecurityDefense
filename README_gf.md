@@ -11,7 +11,7 @@
 
 * [iOS安全攻防（三）：使用Reveal分析他人app](#markdown-af03)
 
-* [iOS安全攻防（一）：Hack必备的命令与工具](#markdown-af04)
+* [iOS安全攻防（四）：阻止GDB依附](#markdown-af04)
 
 * [iOS安全攻防（一）：Hack必备的命令与工具](#markdown-af05)
 
@@ -312,3 +312,57 @@ b.也可以重启设备
 然后就可以到Reveal看看别人的app怎么布局的了，苹果的appstore：
 
 ![](./images/4196_140211110450_1.jpg)
+
+
+### <a name="markdown-af04"></a>iOS安全攻防（四）：阻止GDB依附
+
+GDB是大多数hackers的首选，阻止GDB依附到应用的常规办法是：
+
+```
+    #import <sys/ptrace.h>  
+      
+    int main(int argc, charchar *argv[])  
+    {  
+    #ifndef DEBUG  
+        ptrace(PT_DENY_ATTACH,0,0,0);  
+    #endif  
+        @autoreleasepool {  
+            return UIApplicationMain(argc, argv, nil, NSStringFromClass([WQMainPageAppDelegate class]));  
+        }  
+    }  
+```
+
+
+但遗憾的是，iPhone真实的运行环境是没有sys/ptrace.h抛出的。虽然 ptrace 方法没有被抛出, 但是不用担心，我们可以通过dlopen拿到它。
+
+dlopen： 当path 参数为0是,他会自动查找 $LD_LIBRARY_PATH,$DYLD_LIBRARY_PATH, $DYLD_FALLBACK_LIBRARY_PATH 和 当前工作目录中的动态链接库. 
+
+
+
+```
+    #import <dlfcn.h>  
+    #import <sys/types.h>  
+      
+    typedef int (*ptrace_ptr_t)(int _request, pid_t _pid, caddr_t _addr, int _data);  
+    #if !defined(PT_DENY_ATTACH)  
+    #define PT_DENY_ATTACH 31  
+    #endif  // !defined(PT_DENY_ATTACH)  
+      
+    void disable_gdb() {  
+        void* handle = dlopen(0, RTLD_GLOBAL | RTLD_NOW);  
+        ptrace_ptr_t ptrace_ptr = dlsym(handle, "ptrace");  
+        ptrace_ptr(PT_DENY_ATTACH, 0, 0, 0);  
+        dlclose(handle);  
+    }  
+      
+    int main(int argc, charchar *argv[])  
+    {  
+    #ifndef DEBUG  
+        disable_gdb();  
+    #endif  
+        @autoreleasepool {  
+            return UIApplicationMain(argc, argv, nil, NSStringFromClass([WQMainPageAppDelegate class]));  
+        }  
+    }  
+```
+
