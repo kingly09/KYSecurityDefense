@@ -26,6 +26,7 @@
 * [iOS安全攻防（十六）：使用introspy追踪分析应用程序](#markdown-af16)
 * [iOS安全攻防（十七）：Fishhook](#markdown-af17)
 * [iOS安全攻防（十九）：基于脚本实现动态库注入](#markdown-af19)
+* [iOS安全攻防（二十）：越狱检测的攻与防](#markdown-af20)
 
 
 
@@ -1883,6 +1884,157 @@ MobileSubstrate可以帮助我们加载自己的动态库，于是开发者们�
 应该是因为iOS7的沙盒机制升了级，把我们这套小把戏拦在门外了……
 那又怎么样，面包总会有的～
 
+
+
+### <a name="markdown-af20"></a>iOS安全攻防（二十）：越狱检测的攻与防
+
+
+
+
+在应用开发过程中，我们希望知道设备是否越狱，正以什么权限运行程序，好对应采取一些防御和安全提示措施。
+
+iOS7相比之前版本的系统而言，升级了沙盒机制，封锁了几乎全部应用沙盒可以共享数据的入口。即使在越狱情况下，限制也非常多，大大增加了应用层攻击难度。比如，在iOS7之前，我们可以尝试往沙盒外写文件判断是否越狱，但iOS7越狱后也无该权限，还使用老方法检测会导致误判。
+
+那么，到底应该如何检测越狱呢？攻击者又会如果攻破检测呢？本文就着重讨论一下越狱检测的攻与防。
+
+
+ 
+
+
+
+首先，你可以尝试使用NSFileManager判断设备是否安装了如下越狱常用工具：
+/Applications/Cydia.app
+/Library/MobileSubstrate/MobileSubstrate.dylib
+/bin/bash
+/usr/sbin/sshd
+/etc/apt
+
+
+但是不要写成BOOL开关方法，给攻击者直接锁定目标hook绕过的机会
+
+[objc] view plain copy
+
+    +(BOOL)isJailbroken{  
+        if ([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Cydia.app"]){  
+            return YES;  
+        }  
+        // ...  
+    }  
+
+
+攻击者可能会改变这些工具的安装路径，躲过你的判断。
+
+
+那么，你可以尝试打开cydia应用注册的URL scheme：
+
+[objc] view plain copy
+
+    if([[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"cydia://package/com.example.package"]]){  
+         NSLog(@"Device is jailbroken");  
+    }  
+
+
+
+但是不是所有的工具都会注册URL scheme，而且攻击者可以修改任何应用的URL scheme。 
+
+
+那么，你可以尝试读取下应用列表，看看有无权限获取：
+
+[objc] view plain copy
+
+    if ([[NSFileManager defaultManager] fileExistsAtPath:@"/User/Applications/"]){  
+            NSLog(@"Device is jailbroken");  
+            NSArray *applist = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:@"/User/Applications/"  
+                                                                                   error:nil];  
+            NSLog(@"applist = %@",applist);  
+    }  
+
+
+越了狱的设备是可以获取到的：
+
+
+攻击者可能会hook NSFileManager 的方法，让你的想法不能如愿。
+
+
+那么，你可以回避 NSFileManager，使用stat系列函数检测Cydia等工具：
+
+[objc] view plain copy
+
+    #import <sys/stat.h>  
+      
+    void checkCydia(void)  
+    {  
+        struct stat stat_info;  
+        if (0 == stat("/Applications/Cydia.app", &stat_info)) {  
+            NSLog(@"Device is jailbroken");  
+        }  
+    }  
+
+
+
+攻击者可能会利用 Fishhook原理 hook了stat。
+
+
+那么，你可以看看stat是不是出自系统库，有没有被攻击者换掉：
+
+[objc] view plain copy
+
+    #import <dlfcn.h>  
+      
+    void checkInject(void)  
+    {  
+        int ret ;  
+        Dl_info dylib_info;  
+        int (*func_stat)(const charchar *, struct stat *) = stat;  
+        if ((ret = dladdr(func_stat, &dylib_info))) {  
+            NSLog(@"lib :%s", dylib_info.dli_fname);  
+        }  
+    }  
+
+
+如果结果不是 /usr/lib/system/libsystem_kernel.dylib 的话，那就100%被攻击了。
+如果 libsystem_kernel.dylib 都是被攻击者替换掉的……
+
+那也没什么可防的大哥你随便吧……  
+
+
+
+那么，你可能会想，我该检索一下自己的应用程序是否被链接了异常动态库。
+
+列出所有已链接的动态库：
+
+[objc] view plain copy
+
+    #import <mach-o/dyld.h>  
+      
+    void checkDylibs(void)  
+    {  
+        uint32_t count = _dyld_image_count();  
+        for (uint32_t i = 0 ; i < count; ++i) {  
+            NSString *name = [[NSString alloc]initWithUTF8String:_dyld_get_image_name(i)];  
+            NSLog(@"--%@", name);  
+        }  
+    }  
+
+
+通常情况下，会包含越狱机的输出结果会包含字符串： Library/MobileSubstrate/MobileSubstrate.dylib 。
+
+
+攻击者可能会给MobileSubstrate改名，但是原理都是通过DYLD_INSERT_LIBRARIES注入动态库。
+
+
+那么，你可以通过检测当前程序运行的环境变量：
+
+[objc] view plain copy
+
+    void printEnv(void)  
+    {  
+        charchar *env = getenv("DYLD_INSERT_LIBRARIES");  
+        NSLog(@"%s", env);  
+    }  
+
+
+未越狱设备返回结果是null，越狱设备就各有各的精彩了，尤其是老一点的iOS版本越狱环境。
 
 
 
