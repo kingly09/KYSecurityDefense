@@ -29,6 +29,8 @@
 * [iOS安全攻防（二十）：越狱检测的攻与防](#markdown-af20)
 * [iOS安全攻防（二十二）：static和被裁的符号表](#markdown-af22)
 * [iOS安全攻防（二十三）：Objective-C代码混淆](#markdown-af23)
+* [iOS安全攻防（二十四）：敏感逻辑的保护方案](#markdown-af24)
+
 
 
 
@@ -2261,3 +2263,137 @@ mv func.list your_proj_path/
 直接build，混淆脚本会在编译前运行，进行字符随机替换，并且每次build的随机字符不同，如图：
 
 ![](./images/237.png)
+
+
+### <a name="markdown-af24"></a>iOS安全攻防（二十四）：敏感逻辑的保护方案
+
+Objective-C代码容易被hook，暴露信息太赤裸裸，为了安全，改用C来写吧！
+
+
+
+
+
+当然不是全部代码都要C来写，我指的是敏感业务逻辑代码。
+
+本文就介绍一种低学习成本的，简易的，Objective-C逻辑代码重写为C代码的办法。
+
+
+也许，程序中存在一个类似这样的类：
+
+[objc] view plain copy
+
+    @interface XXUtil : NSObject  
+      
+    + (BOOL)isVerified;  
+    + (BOOL)isNeedSomething;  
+    + (void)resetPassword:(NSString *)password;  
+      
+    @end  
+
+
+
+被class-dump出来后，利用Cycript很容易实现攻击，容易被hook，存在很大的安全隐患。
+
+想改，但是不想大改程序结构，肿么办呢？
+
+
+
+
+
+把函数名隐藏在结构体里，以函数指针成员的形式存储。
+
+这样做的好处是，编译后，只留了下地址，去掉了名字和参数表，提高了逆向成本和攻击门槛。
+
+
+
+改写的程序如下：
+
+[objc] view plain copy
+
+    //XXUtil.h  
+    #import <Foundation/Foundation.h>  
+      
+    typedef struct _util {  
+        BOOL (*isVerified)(void);  
+        BOOL (*isNeedSomething)(void);  
+        void (*resetPassword)(NSString *password);  
+    }XXUtil_t ;  
+      
+    #define XXUtil ([_XXUtil sharedUtil])  
+      
+    @interface _XXUtil : NSObject  
+      
+    + (XXUtil_t *)sharedUtil;  
+    @end  
+
+
+
+[objc] view plain copy
+
+    //XXUtil.m  
+    #import "XXUtil.h"  
+      
+    static BOOL _isVerified(void)  
+    {  
+        //bala bala ...  
+        return YES;  
+    }  
+      
+    static BOOL _isNeedSomething(void)  
+    {  
+        //bala bala ...  
+        return YES;  
+    }  
+      
+    static void _resetPassword(NSString *password)  
+    {  
+        //bala bala ...  
+    }  
+      
+    static XXUtil_t * util = NULL;  
+    @implementation _XXUtil  
+      
+    +(XXUtil_t *)sharedUtil  
+    {  
+        static dispatch_once_t onceToken;  
+        dispatch_once(&onceToken, ^{  
+            util = malloc(sizeof(XXUtil_t));  
+            util->isVerified = _isVerified;  
+            util->isNeedSomething = _isNeedSomething;  
+            util->resetPassword = _resetPassword;  
+        });  
+        return util;  
+    }  
+      
+    + (void)destroy  
+    {  
+        util ? free(util): 0;  
+        util = NULL;  
+    }  
+    @end  
+
+
+
+
+ 最后，根据Xcode的报错指引，把以前这样的调用
+
+[objc] view plain copy
+
+    [XXUtil isVerified];  
+
+
+对应改成：
+
+[objc] view plain copy
+
+    XXUtil->isVerified();  
+
+
+就可以了。
+
+
+是的，绝不费一点脑子。
+
+
+
+
