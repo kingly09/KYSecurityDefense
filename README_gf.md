@@ -18,7 +18,7 @@
 * [iOS安全攻防（八）：键盘缓存与安全键盘](#markdown-af08) 
 * [iOS安全攻防（九）：使用Keychain-Dumper导出keychain数据](#markdown-af09) 
 * [iOS安全攻防（十）：二进制和资源文件自检](#markdown-af10) 
-
+* [iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码](#markdown-af11) 
 
 
 ### <a name="markdown-af01"></a>iOS安全攻防（一）：Hack必备的命令与工具
@@ -1095,3 +1095,103 @@ md5方法：
  
 
 所谓魔高一尺，道高一丈，不过也能阻止一些低级的hack手段了～
+
+
+### <a name="markdown-af11"></a>iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码
+
+
+在之前的 iOS安全攻防（七）：Hack实战——解除支付宝app手势解锁错误次数限制 中，留了一个问题，就是如何破解手势密码。
+
+ 
+
+方法不唯一，本文介绍如何利用gdb分析破解app。
+
+ 
+
+当没有程序源代码的情况下，我们如何利用gdb呢？
+
+ 
+
+为了确定应该如何设置断点，不得不反汇编程序来作为参考了。
+
+
+
+
+ 
+
+在前面的文章提到过，支付宝app的手势密码校验处理非常严谨，没有抛出BOOL判断的方法让我们可以直接修改返回值跳过验证，而是将全部操作封在了
+
+-(void)gestureInputView:(id)view didFinishWithPassword:(id)password;  
+
+ 
+
+于是，我反汇编了支付宝app，找到手势密码解锁的相关代码片段：
+
+
+![](./images/223.png)
+
+
+
+红色箭头标注的地方，让人欣喜，这将是我们断点位置的最好选择。
+
+ 
+
+首先，查看一下相关程序段符号表：
+
+    nm Portal | grep -i gestureinputview   
+
+ 
+
+得到结果：
+
+
+![](./images/224.png)
+
+
+nm Portal | grep -i getpassword  
+
+ 
+
+得到结果：
+
+
+![](./images/225.png)
+
+
+确定了了关键函数的输出符号。
+
+ 
+
+启动支付宝app，并gdb该进程：
+
+    gdb -q -p 671   
+
+在上述两个函数位置设置断点：
+
+![](./images/226.png)
+
+可以通过info breakpoints 查看断点：
+
+![](./images/227.png)
+continue到 getPassword 位置，打印函数栈：
+
+![](./images/228.png)
+我们可以确定了 getPassword 的返回地址是 0x00becb36 ,  对该地址加断点：
+
+    b * 0xbecb36   
+
+然后继续continue，程序将卡在上面的断点上。
+
+
+
+从上面的反汇编代码，我们可以知道，用户输入的密码为存在r8上，原始密码为存在r0上，我们直接打印出这两个寄存器的值：
+
+
+ ![](./images/230.png)
+
+正确密码是个“Z”手势图画，而当前输入为“一”手势图画。
+
+ 
+
+可以得出结论，支付宝app的手势密码和大多数app一样，手势密码格式是字符串，9个点分别对应字符123456789。
+
