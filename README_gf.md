@@ -15,6 +15,7 @@
 * [iOS安全攻防（五）：使用Cycript修改支付宝app运行时](#markdown-af05)
 * [iOS安全攻防（六）：使用class-dump-z分析支付宝app](#markdown-af06)
 * [iOS安全攻防（七）：Hack实战——解除支付宝app手势解锁错误次数限制](#markdown-af07) 
+* [iOS安全攻防（八）：键盘缓存与安全键盘](#markdown-af08) 
 
 
 
@@ -775,4 +776,167 @@ iOS7越狱后的Cydia源里已经下载不到Clutch了，但是我们可以从�
     -(void)gestureInputView:(id)view didFinishWithPassword:(id)password;   
 
 id类型的密码，很严谨，又给hack带来不少麻烦呀～
+ 
+ 
+### <a name="markdown-af08"></a>iOS安全攻防（八）：键盘缓存与安全键盘
+
+
+大部分中文应用弹出的默认键盘是简体中文输入法键盘，在输入用户名和密码的时候，如果使用简体中文输入法键盘，输入英文字符和数字字符的用户名和密码时，会自动启动系统输入法自动更正提示，然后用户的输入记录会被缓存下来。
+
+ 
+
+系统键盘缓存最方便拿到的就是利用系统输入法自动更正的字符串输入记录。
+
+缓存文件的地址是：/private/var/mobile/Library/Keyboard/dynamic-text.dat
+
+ 
+
+导出该缓存文件，查看内容，欣喜的发现一切输入记录都是明文存储的。因为系统不会把所有的用户输入记录都当作密码等敏感信息来处理。
+
+ 
+
+一般情况下，一个常规iPhone用户的dynamic-text.dat文件，高频率出现的字符串就是用户名和密码。
+
+ 
+
+所以，一般银行客户端app输入密码时都不使用系统键盘，而使用自己定制的键盘，原因主要有2个：
+
+1）避免第三方读取系统键盘缓存
+
+2）防止屏幕录制 （自己定制的键盘按键不加按下效果）
+
+ 
+
+那么，如何实现自定义安全键盘呢？大致思路如下：
+
+1）首先捕获系统键盘的弹出、收回通知
+
+2）创建一个更高级别的window挡住系统键盘
+
+3）需要抛出一个 id<UITextInput>textInput 的弱引用切换焦点
+
+ 
+
+下面给出一个简单的安全键盘模型：
+
+    @interface WQSafeKeyboard : UIWindow   
+       
+    @property (nonatomic, weak, setter = focusOnTextFiled:) UITextField *textFiled;   
+    + (WQSafeKeyboard *)deploySafeKeyboard;   
+    @end   
+       
+       
+    @interface WQSafeKeyboard()   
+       
+    @property (nonatomic, strong)WQInterKeyboard *keyboard;   
+    @end   
+       
+    @implementation WQSafeKeyboard   
+       
+    + (WQSafeKeyboard *)deploySafeKeyboard   
+    {   
+        WQSafeKeyboard *kb = [[WQSafeKeyboard alloc]init];   
+        [kb addObserver];   
+        return kb;   
+    }   
+       
+    - (instancetype)init   
+    {   
+        if (self = [super init]) {   
+            self.windowLevel = UIWindowLevelAlert;   
+            self.frame = CGRectZero;   
+            self.rootViewController = self.keyboard;   
+        }   
+        return self;   
+    }   
+       
+    - (void)dealloc   
+    {   
+        [[NSNotificationCenter defaultCenter] removeObserver:self];   
+    }   
+       
+    - (WQInterKeyboard *)keyboard   
+    {   
+        if (!_keyboard) {   
+            _keyboard = [[WQInterKeyboard alloc]init];   
+        }   
+        return _keyboard;   
+    }   
+       
+    - (void)focusOnTextFiled:(UITextField *)textFiled   
+    {   
+        _textFiled = textFiled;   
+        self.keyboard.textField = _textFiled;   
+    }   
+       
+    - (void)addObserver   
+    {   
+        [[NSNotificationCenter defaultCenter]addObserver:self   
+                                                selector:@selector(keyboardWillShow:)   
+                                                    name:UIKeyboardWillShowNotification   
+                                                  object:nil];   
+        [[NSNotificationCenter defaultCenter]addObserver:self   
+                                                selector:@selector(keyboardWillHide:)   
+                                                    name:UIKeyboardWillHideNotification   
+                                                  object:nil];   
+    }   
+       
+    - (void)keyboardWillShow:(NSNotification *)notification   
+    {   
+        if (![self.textFiled isFirstResponder]) {   
+            return;   
+        }   
+        [self keyboardAnimationWithNotification:notification];   
+    }   
+       
+    - (void)keyboardWillHide:(NSNotification *)notification   
+    {   
+        if (![self.textFiled isFirstResponder]) {   
+            return;   
+        }   
+        [self keyboardAnimationWithNotification:notification];   
+    }   
+       
+    - (void)keyboardAnimationWithNotification:(NSNotification *)notification   
+    {   
+        [self makeKeyAndVisible];   
+        NSDictionary *userInfo = [notification userInfo];   
+        CGRect kbFrame_end,kbFrame_begin;   
+        NSTimeInterval animationDuration;   
+        UIViewAnimationCurve animationCurve;   
+        [userInfo[UIKeyboardFrameEndUserInfoKey] getValue:&kbFrame_end];   
+        [userInfo[UIKeyboardFrameBeginUserInfoKey] getValue:&kbFrame_begin];   
+        [userInfo[UIKeyboardAnimationCurveUserInfoKey] getValue:&animationCurve];   
+        [userInfo[UIKeyboardAnimationDurationUserInfoKey] getValue:&animationDuration];   
+           
+        self.frame = [self resizeFrameToAdjust:kbFrame_begin];   
+        [UIView animateWithDuration:animationDuration   
+                              delay:0   
+                            options:(animationCurve<<16)   
+                         animations:^{   
+                             self.frame = [self resizeFrameToAdjust:kbFrame_end];   
+                         }completion:^(BOOL finished) {   
+                               
+                         }];   
+        if ([notification.name isEqualToString:UIKeyboardWillHideNotification]) {   
+            [self resignKeyWindow];   
+        }   
+    }   
+       
+    - (CGRect)resizeFrameToAdjust:(CGRect)frame   
+    {   
+        if ([[UIApplication sharedApplication] isStatusBarHidden] )   
+            return frame;   
+           
+        if (SYSTEM_VERSION_LESS_THAN(@"7.0")) {   
+            frame = CGRectMake(frame.origin.x,   
+                               frame.origin.y - STATUSBAR_HEIGHT,   
+                               frame.size.width,   
+                               frame.size.height);   
+        }   
+        return frame;   
+    }   
+       
+    @end   
+
  
