@@ -16,7 +16,7 @@
 * [iOS安全攻防（六）：使用class-dump-z分析支付宝app](#markdown-af06)
 * [iOS安全攻防（七）：Hack实战——解除支付宝app手势解锁错误次数限制](#markdown-af07) 
 * [iOS安全攻防（八）：键盘缓存与安全键盘](#markdown-af08) 
-
+* [iOS安全攻防（九）：使用Keychain-Dumper导出keychain数据](#markdown-af09) 
 
 
 
@@ -939,4 +939,41 @@ id类型的密码，很严谨，又给hack带来不少麻烦呀～
        
     @end   
 
+
+### <a name="markdown-af09"></a>iOS安全攻防（九）：使用Keychain-Dumper导出keychain数据
+
+
+iOS系统及第三方应用都会使用Keychain来作为数据持久化存储媒介，或者应用间数据共享的渠道。
+
  
+
+所以Keychain数据库是hacker们最关注的数据源头之一。
+
+ 
+
+不知道是算幸运还是不幸，导出Keychain数据库数据的工具早已非常完善，下载地址：Keychain-Dumper传送门
+
+ 
+
+操作步骤极其简单：
+
+1）赋予Keychain数据库可读权限
+
+Primer:~ root# cd /private/var/Keychains/  
+
+Primer:/private/var/Keychains root# ls  
+
+TrustStore.sqlite3  accountStatus.plist  caissuercache.sqlite3  keychain-2.db  keychain-2.db-shm  keychain-2.db-wal  ocspcache.sqlite3  ocspcache.sqlite3-shm  ocspcache.sqlite3-wal  
+
+Primer:/private/var/Keychains root# chmod +r keychain-2.db  
+
+ 
+
+2）使用Keychain-Dumper导出Keychain
+
+Primer:/private/var/Keychains root# /your_path/keychain_dumper > keychain-export.txt  
+
+ 
+
+然后拷贝到本地查看，到底iOS系统和第三方应用都存放了哪些信息，就一览无余了。
+
