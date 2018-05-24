@@ -20,6 +20,7 @@
 * [iOS安全攻防（十）：二进制和资源文件自检](#markdown-af10) 
 * [iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码](#markdown-af11) 
 * [iOS安全攻防（十二）：iOS7的动态库注入](#markdown-af12) 
+* [iOS安全攻防（十三）：数据擦除](#markdown-af13) 
 
 ### <a name="markdown-af01"></a>iOS安全攻防（一）：Hack必备的命令与工具
 
@@ -1300,5 +1301,66 @@ ld -dylib -lsystem -lobjc  -syslibroot /Applications/Xcode.app/Contents/Develope
  
 
 剩下的就要自己去思考了，除了加句无聊的Log，我们还可以做点什么呢？
+
+
+### <a name="markdown-af13"></a>iOS安全攻防（十三）：数据擦除
+
+对于敏感数据，我们不希望长时间放在内存中，而希望使用完后立即就被释放掉。
+ 
+但是不管是ARC还是MRC，自动释放池也有轮循工作周期，我们都无法控制内存数据被擦除的准确时间，让hackers们有机可乘。
+ 
+本文介绍一个小技巧——及时数据擦除。
+ 
+ 
+假如一个View Controller A的一个数据被绑在一个property上，
+
+    @interface WipingMemoryViewController : UIViewController   
+       
+    @property (nonatomic,copy) NSString *text;   
+    @end   
+
+ 
+ 当A push到 另外一个View Controller B时，该数据还是有可能被读到的
+
+    WipingMemoryViewController *lastController = (WipingMemoryViewController *)self.navigationController.viewControllers[0];   
+    NSLog(@"text = %@",lastController.text);   
+
+ 
+于是，“用后即擦”变得十分必要：
+
+    _text = [[NSString alloc]initWithFormat:@"information"];    
+    NSLog(@"Origal string = %@",_text);   
+    //do something...   
+    charchar *string = (charchar *)CFStringGetCStringPtr((CFStringRef)_text, CFStringGetSystemEncoding());   
+    memset(string, 0, [_text length]);   
+    NSLog(@"final text = %@",_text);   
+
+ 
+Log输出如下：
+
+    WipingMemory[2518:70b] Origal string = information   
+    WipingMemory[2518:70b] final text =    
+
+ 
+可以看到，我们想要保护的数据，被有效的擦除了。
+ 
+还有提个醒，如果是这样
+
+    _text = @"information";   
+
+ 
+创建的字符串，是会被分配到data区，而是无法修改的。
+ 
+如果有兴趣也有闲心，可以试试运行下面的代码，有彩蛋哦：
+
+    _text = @"information";   
+    memset((__bridge voidvoid *)(_text), 0, _text.length - 1);   
+    NSString *myString = [[NSString alloc]initWithFormat:@"information"];   
+    NSLog(@"Origal text : %@ \n",myString);   
+
+ 
+ 
+编译器把两个information的省略到一个地址了～
+
 
 
