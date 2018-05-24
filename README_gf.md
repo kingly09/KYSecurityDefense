@@ -27,6 +27,8 @@
 * [iOS安全攻防（十七）：Fishhook](#markdown-af17)
 * [iOS安全攻防（十九）：基于脚本实现动态库注入](#markdown-af19)
 * [iOS安全攻防（二十）：越狱检测的攻与防](#markdown-af20)
+* [iOS安全攻防（二十二）：static和被裁的符号表](#markdown-af22)
+
 
 
 
@@ -2035,6 +2037,79 @@ iOS7相比之前版本的系统而言，升级了沙盒机制，封锁了几乎�
 
 
 未越狱设备返回结果是null，越狱设备就各有各的精彩了，尤其是老一点的iOS版本越狱环境。
+
+
+
+### <a name="markdown-af22"></a>iOS安全攻防（二十二）：static和被裁的符号表
+
+为了不让攻击者理清自己程序的敏感业务逻辑，于是我们想方设法提高逆向门槛。
+本文就介绍一个防御技巧————利用static关键字裁掉函数符号。
+
+
+原理
+
+如果函数属性为 static ，那么编译时该函数符号就会被解析为local符号。
+在发布release程序时（用Xcode打包编译二进制）默认会strip裁掉这些函数符号，无疑给逆向者加大了工作难度。
+
+
+
+验证
+
+
+写个demo验证一下上述理论，以一段创建Button的代码为例，对应补充一个static版本。
+
+[objc] view plain copy
+
+    id createBtn()  
+    {  
+        UIButton *btn = [[UIButton alloc]initWithFrame:CGRectZero];  
+        [btn setFrame:CGRectMake(200, 100, 100, 100)];  
+        [btn setBackgroundColor:[UIColor redColor]];  
+        btn.layer.cornerRadius = 7.0f;  
+        btn.layer.masksToBounds = YES;  
+        return btn;  
+    }  
+      
+    static id static_createBtn()  
+    {  
+        UIButton *btn = [[UIButton alloc]initWithFrame:CGRectZero];  
+        [btn setFrame:CGRectMake(50, 100, 100, 100)];  
+        [btn setBackgroundColor:[UIColor blueColor]];  
+        btn.layer.cornerRadius = 7.0f;  
+        btn.layer.masksToBounds = YES;  
+        return btn;  
+    }  
+
+
+
+再来看一下反编的结果，对于createBtn()方法，我们可以得到它的伪代码：
+
+
+
+![](./images/235.png)
+
+函数名虽然面目全非，但是基本操作还是清晰的。
+
+对于static_createBtn()方法呢，我们已经无法看到它任何直观的有价值信息了。
+
+
+
+
+局限
+
+当然这种方法也有局限性。正如你所知道的，static函数，只在本文件可见。
+
+
+
+
+打破局限
+
+
+怎么让别的文件也能调到本文件的static方法呢？
+在本文件建造一个结构体，结构体里包含函数指针。把static函数的函数指针都赋在这个结构体里，再把这个结构体抛出去。
+这样做的好处是，既隐藏了函数代码也丰富了调用方式。
+
+
 
 
 
