@@ -17,6 +17,7 @@
 * [iOS安全攻防（七）：Hack实战——解除支付宝app手势解锁错误次数限制](#markdown-af07) 
 * [iOS安全攻防（八）：键盘缓存与安全键盘](#markdown-af08) 
 * [iOS安全攻防（九）：使用Keychain-Dumper导出keychain数据](#markdown-af09) 
+* [iOS安全攻防（十）：二进制和资源文件自检](#markdown-af10) 
 
 
 
@@ -977,3 +978,120 @@ Primer:/private/var/Keychains root# /your_path/keychain_dumper > keychain-export
 
 然后拷贝到本地查看，到底iOS系统和第三方应用都存放了哪些信息，就一览无余了。
 
+### <a name="markdown-af10"></a>iOS安全攻防（十）：二进制和资源文件自检
+
+
+
+我们把自己的程序发布到app store，但是不能保证每一个用户都是从app store下载官方app，也不能保证每一个用户都不越狱。
+
+ 
+
+换句话说，我们无法保证程序运行环境在MAC管控策略下就绝对的安全。
+
+ 
+
+所以，在有些情况下，尤其是和钱有关系的app，我们有必要在和服务器通信时，让服务器知道客户端到底是不是官方正版的app。
+
+ 
+
+何以判断自己是不是正版app呢？hackers们破解你的app，无非就2个地方可以动，1个是二进制，1个是资源文件。
+
+ 
+
+二进制都重新编译过了自然肯定是盗版……
+
+ 
+
+有些低级的hackers喜欢修改人家的资源文件然后贴上自己的广告，或者给用户错误的指引……修改资源文件是不需要重新编译二进制的。
+
+ 
+
+因此，我们有必要在敏感的请求报文中，增加正版应用的二进制和资源文件的标识，让服务器知道，此请求是否来自正版的未经修改的app。
+
+ 
+
+在沙盒中，我们可以读到自己程序的二进制，也可以读到资源文件签名文件，这两个文件都不算大，我们可以对其取md5值然后以某种组合算法得到一个标记字符串，然后发给服务器。
+
+ 
+
+我封装了相关文件的读取地址
+
+    @implementation WQPathUtilities   
+       
+    + (NSString *)directory:(NSSearchPathDirectory)dir   
+    {   
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(dir, NSUserDomainMask, YES);   
+        NSString *dirStr = [paths objectAtIndex:0];   
+        return dirStr;   
+    }   
+       
+    + (NSString *)documentsDirectory   
+    {   
+        return [WQPathUtilities directory:NSDocumentDirectory];   
+    }   
+       
+    + (NSString *)cachesDirectory   
+    {   
+        return [WQPathUtilities directory:NSCachesDirectory];   
+    }   
+       
+    + (NSString *)tmpDirectory   
+    {   
+        return NSTemporaryDirectory();   
+    }   
+       
+    + (NSString *)homeDirectory   
+    {   
+        return NSHomeDirectory();   
+    }   
+       
+    + (NSString *)codeResourcesPath   
+    {   
+        NSString *excutableName = [[NSBundle mainBundle] infoDictionary][@"CFBundleExecutable"];   
+        NSString *tmpPath = [[WQPathUtilities documentsDirectory] stringByDeletingLastPathComponent];   
+        NSString *appPath = [[tmpPath stringByAppendingPathComponent:excutableName]   
+                             stringByAppendingPathExtension:@"app"];   
+        NSString *sigPath = [[appPath stringByAppendingPathComponent:@"_CodeSignature"]   
+                             stringByAppendingPathComponent:@"CodeResources"];   
+        return sigPath;   
+    }   
+       
+    + (NSString *)binaryPath   
+    {   
+        NSString *excutableName = [[NSBundle mainBundle] infoDictionary][@"CFBundleExecutable"];   
+        NSString *tmpPath = [[WQPathUtilities documentsDirectory] stringByDeletingLastPathComponent];   
+        NSString *appPath = [[tmpPath stringByAppendingPathComponent:excutableName]   
+                             stringByAppendingPathExtension:@"app"];   
+        NSString *binaryPath = [appPath stringByAppendingPathComponent:excutableName];   
+        return binaryPath;   
+    }   
+       
+    @end   
+
+md5方法：
+
+    #import "CommonCrypto/CommonDigest.h"   
+       
+    +(NSString *)md5WithString:(NSString *)string   
+    {   
+        const charchar *cStr = [string UTF8String];   
+        unsigned char result[CC_MD5_DIGEST_LENGTH];   
+        CC_MD5(cStr, strlen(cStr), result);   
+           
+        return [[NSString stringWithFormat:@"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",   
+                 result[0], result[1], result[2], result[3],   
+                 result[4], result[5], result[6], result[7],   
+                 result[8], result[9], result[10], result[11],   
+                 result[12], result[13], result[14], result[15]   
+                 ] lowercaseString];   
+    }   
+
+这样做就100%安全了吗？
+
+ 
+
+答案是：不……
+
+ 
+
+所谓魔高一尺，道高一丈，不过也能阻止一些低级的hack手段了～
