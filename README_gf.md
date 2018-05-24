@@ -24,6 +24,7 @@
 * [iOS安全攻防（十四）：Hack实战——支付宝app手势密码校验欺骗](#markdown-af14) 
 * [iOS安全攻防（十五）：使用iNalyzer分析应用程序](#markdown-af15) 
 * [iOS安全攻防（十六）：使用introspy追踪分析应用程序](#markdown-af16)
+* [iOS安全攻防（十七）：Fishhook](#markdown-af17)
 
 
 
@@ -1658,3 +1659,141 @@ Introspy-Analyzer [下载地址传送门](https://github.com/iSECPartners/Intros
 
 ![](./images/4196_140211125248_1.jpg)
 
+
+### <a name="markdown-af17"></a>iOS安全攻防（十七）：Fishhook
+
+
+众所周知，Objective-C的首选hook方案为Method Swizzle，于是大家纷纷表示核心内容应该用C写。
+接下来进阶说说iOS下C函数的hook方案，先介绍第一种方案————[fishhook](https://github.com/facebook/fishhook) .
+
+
+什么是fishhook
+
+fishhook是facebook提供的一个动态修改链接Mach-O符号表的开源工具。
+
+
+什么是Mach-O
+Mach-O为Mach Object文件格式的缩写,也是用于iOS可执行文件，目标代码，动态库，内核转储的文件格式。
+Mach-O有自己的dylib规范。
+
+
+
+fishhook的原理
+详见官方的How it works，这里我作个简要说明。
+dyld链接2种符号，lazy和non-lazy，fishhook可以重新链接/替换本地符号。
+
+
+![](./images/234.png)
+
+
+如图所示，__DATA区有两个section和动态符号链接相关：__nl_symbol_ptr 、__la_symbol_ptr。__nl_symbol_ptr为一个指针数组，直接对应non-lazy绑定数据。__la_symbol_ptr也是一个指针数组，通过dyld_stub_binder辅助链接。<mach-o/loader.h>的section头提供符号表的偏移量。
+图示中，1061是间接符号表的偏移量，*（偏移量+间接符号地址）=16343，即符号表偏移量。符号表中每一个结构都是一个nlist结构体，其中包含字符表偏移量。通过字符表偏移量最终确定函数指针。
+
+fishhook就是对间接符号表的偏移量动的手脚，提供一个假的nlist结构体，从而达到hook的目的。
+
+
+fishhook替换符号函数：
+
+[objc] view plain copy
+
+    int rebind_symbols(struct rebinding rebindings[], size_t rebindings_nel) {  
+      int retval = prepend_rebindings(rebindings, rebindings_nel);  
+      if (retval < 0) {  
+        return retval;  
+      }  
+      // If this was the first call, register callback for image additions (which is also invoked for  
+      // existing images, otherwise, just run on existing images  
+      if (!rebindings_head->next) {  
+        _dyld_register_func_for_add_image(rebind_symbols_for_image);  
+      } else {  
+        uint32_t c = _dyld_image_count();  
+        for (uint32_t i = 0; i < c; i++) {  
+          rebind_symbols_for_image(_dyld_get_image_header(i), _dyld_get_image_vmaddr_slide(i));  
+        }  
+      }  
+      return retval;  
+    }  
+
+
+关键函数是 _dyld_register_func_for_add_image，这个函数是用来注册回调，当dyld链接符号时，调用此回调函数。 rebind_symbols_for_image 做了具体的替换和填充。
+
+
+
+
+fishhook替换Core Foundation函数的例子
+
+
+以下是官方提供的替换Core Foundation中open和close函数的实例代码
+[objc] view plain copy
+
+    #import <dlfcn.h>  
+      
+    #import <UIKit/UIKit.h>  
+      
+    #import "AppDelegate.h"  
+    #import "fishhook.h"  
+      
+    static int (*orig_close)(int);  
+    static int (*orig_open)(const charchar *, int, ...);  
+      
+    void save_original_symbols() {  
+      orig_close = dlsym(RTLD_DEFAULT, "close");  
+      orig_open = dlsym(RTLD_DEFAULT, "open");  
+    }  
+      
+    int my_close(int fd) {  
+      printf("Calling real close(%d)\n", fd);  
+      return orig_close(fd);  
+    }  
+      
+    int my_open(const charchar *path, int oflag, ...) {  
+      va_list ap = {0};  
+      mode_t mode = 0;  
+      
+      if ((oflag & O_CREAT) != 0) {  
+        // mode only applies to O_CREAT  
+        va_start(ap, oflag);  
+        mode = va_arg(ap, int);  
+        va_end(ap);  
+        printf("Calling real open('%s', %d, %d)\n", path, oflag, mode);  
+        return orig_open(path, oflag, mode);  
+      } else {  
+        printf("Calling real open('%s', %d)\n", path, oflag);  
+        return orig_open(path, oflag, mode);  
+      }  
+    }  
+      
+    int main(int argc, charchar * argv[])  
+    {  
+      @autoreleasepool {  
+        save_original_symbols();  
+        //fishhook用法  
+        rebind_symbols((struct rebinding[2]){{"close", my_close}, {"open", my_open}}, 2);  
+      
+        // Open our own binary and print out first 4 bytes (which is the same  
+        // for all Mach-O binaries on a given architecture)  
+        int fd = open(argv[0], O_RDONLY);  
+        uint32_t magic_number = 0;  
+        read(fd, &magic_number, 4);  
+        printf("Mach-O Magic Number: %x \n", magic_number);  
+        close(fd);  
+      
+        return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));  
+      }  
+    }  
+
+
+
+注释//fishhook用法 处
+
+[objc] view plain copy
+
+    rebind_symbols((struct rebinding[2]){{"close", my_close}, {"open", my_open}}, 2);  
+
+
+传入rebind_symbols的第一个参数是一个结构体数组，大括号中为对应数组内容。
+
+
+
+
+不得不说，facebook忒NB。
