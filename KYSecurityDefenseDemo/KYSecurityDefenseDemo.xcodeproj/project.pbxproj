@@ -14,6 +14,7 @@
 		BCB6494C20AE69600037F644 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BCB6494B20AE69600037F644 /* Assets.xcassets */; };
 		BCB6494F20AE69600037F644 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BCB6494D20AE69600037F644 /* LaunchScreen.storyboard */; };
 		BCB6495220AE69600037F644 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = BCB6495120AE69600037F644 /* main.m */; };
+		BCE17C6420B64B2C00BC1E02 /* TestObject.m in Sources */ = {isa = PBXBuildFile; fileRef = BCE17C6320B64B2C00BC1E02 /* TestObject.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,8 @@
 		BCB6494E20AE69600037F644 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BCB6495020AE69600037F644 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BCB6495120AE69600037F644 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		BCE17C6220B64B2C00BC1E02 /* TestObject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TestObject.h; sourceTree = "<group>"; };
+		BCE17C6320B64B2C00BC1E02 /* TestObject.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TestObject.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +67,8 @@
 				BCB6493F20AE695E0037F644 /* AppDelegate.h */,
 				BCB6494020AE695E0037F644 /* AppDelegate.m */,
 				BCB6494220AE695E0037F644 /* FirstViewController.h */,
+				BCE17C6220B64B2C00BC1E02 /* TestObject.h */,
+				BCE17C6320B64B2C00BC1E02 /* TestObject.m */,
 				BCB6494320AE695E0037F644 /* FirstViewController.m */,
 				BCB6494520AE695E0037F644 /* SecondViewController.h */,
 				BCB6494620AE695E0037F644 /* SecondViewController.m */,
@@ -148,6 +153,7 @@
 			files = (
 				BCB6494720AE695E0037F644 /* SecondViewController.m in Sources */,
 				BCB6494120AE695E0037F644 /* AppDelegate.m in Sources */,
+				BCE17C6420B64B2C00BC1E02 /* TestObject.m in Sources */,
 				BCB6495220AE69600037F644 /* main.m in Sources */,
 				BCB6494420AE695E0037F644 /* FirstViewController.m in Sources */,
 			);
