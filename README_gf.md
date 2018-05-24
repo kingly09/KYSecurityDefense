@@ -19,7 +19,7 @@
 * [iOS安全攻防（九）：使用Keychain-Dumper导出keychain数据](#markdown-af09) 
 * [iOS安全攻防（十）：二进制和资源文件自检](#markdown-af10) 
 * [iOS安全攻防（十一）：Hack实战——探究支付宝app手势密码](#markdown-af11) 
-
+* [iOS安全攻防（十二）：iOS7的动态库注入](#markdown-af12) 
 
 ### <a name="markdown-af01"></a>iOS安全攻防（一）：Hack必备的命令与工具
 
@@ -1194,4 +1194,111 @@ continue到 getPassword 位置，打印函数栈：
  
 
 可以得出结论，支付宝app的手势密码和大多数app一样，手势密码格式是字符串，9个点分别对应字符123456789。
+
+
+
+### <a name="markdown-af12"></a>iOS安全攻防（十二）：iOS7的动态库注入
+
+
+
+iOS系统不断升级，结构不断调整，所以我们可以利用的动态库注入方法也根据系统版本的不同而不同。
+
+ 
+
+在此之前，我们可以利用环境变量 DYLD_INSERT_LIBRARY 来添加动态库，iOS7被成功越狱后，我们需要自己去探索实践iOS7动态库注入的方式。
+
+ 
+
+本文将在iOS7.0.4环境下，以 hook 支付宝app 程序中 ALPLauncherController 的视图加载方法为例，介绍在iOS7下，如何实现动态库注入攻击。
+
+ 
+
+相关工具位置信息
+
+先总结罗列一下相关编译、链接工具的位置路径信息，在各位自行下载的iOS SDK中
+
+clang  :    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang
+
+gcc     :    /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/arm-apple-darwin10-llvm-gcc-4.2
+
+ld         :   /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/ld
+
+                /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+
+sdk     :   /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS7.0.sdk/
+
+ 
+
+动态库源程序
+
+我们编写一个 hook 支付宝app 程序中 ALPLauncherController 的 viewDidLoad 方法，具体方法是利用 Method Swizzling 。
+
+ 
+
+不熟悉 Method Swizzling 的话，可以参看我之前的这篇文章：[Objective-C的hook方案（一）: Method Swizzling](https://blog.csdn.net/yiyaaixuexi/article/details/9374411)  
+
+
+    #import <UIKit/UIKit.h>   
+    #import <objc/runtime.h>   
+       
+    @implementation UIViewController (HookPortal)   
+       
+    -(void)myViewDidLoad   
+    {   
+        NSLog(@"----------------------- myViewDidLoad ----------------------");   
+    }   
+       
+    @end   
+       
+    static void __attribute__((constructor)) initialize(void)   
+    {   
+        NSLog(@"======================= initialize ========================");   
+           
+        Class class = objc_getClass("ALPLauncherController");   
+        Method ori_Method =  class_getInstanceMethod(class, @selector(viewDidLoad));   
+        Method my_Method = class_getInstanceMethod(class, @selector(myViewDidLoad));   
+        method_exchangeImplementations(ori_Method, my_Method);   
+    }   
+
+编译dylib
+
+我们可以利用xcode直接帮忙编译.o，或者自己手动使用clang编译，然后手动ld：
+
+ld -dylib -lsystem -lobjc  -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS7.0.sdk/ -o libwq.dylib xxx.o  
+
+ 
+
+安置、验证dylib
+
+将编译好的 libwq.dylib 拷贝到iPhone 文件系统中 /Library/MobileSubstrate/DynamicLibraries/ 下
+
+如果不放心库是否能正常工作，可以加一步验证操作，写一个demo尝试打开自己的库：
+
+    voidvoid *handle = (void*)dlopen("/Library/MobileSubstrate/DynamicLibraries/libwq.dylib", 0x2);   
+    handle = dlsym(handle, "myViewDidLoad");   
+    if (handle) {   
+        NSLog(@"++++");   
+    }else{   
+        NSLog(@"----");   
+    }   
+
+运行检验效果
+
+到了验证效果的时候，重启设备后者执行：
+
+    killall SpringBoard   
+
+启动支付宝app，然后观察log信息：
+
+    Portal[3631] <Notice>: MS:Notice: Injecting: com.alipay.iphoneclient [Portal] (847.21)   
+    Portal[3631] <Notice>: MS:Notice: Loading: /Library/MobileSubstrate/DynamicLibraries/libwq.dylib   
+    Portal[3631] <Warning>: ======================= initialize ========================   
+    Portal[3631] <Warning>: ----------------------- myViewDidLoad ----------------------   
+
+证明我们的动态库已经被加载， 我们的Hook 也成功了。
+
+ 
+
+剩下的就要自己去思考了，除了加句无聊的Log，我们还可以做点什么呢？
+
 
