@@ -9,7 +9,7 @@
 
 * [iOS安全攻防（二）：后台daemon非法窃取用户iTunesstore信息](#markdown-af02)
 
-* [iOS安全攻防（一）：Hack必备的命令与工具](#markdown-af03)
+* [iOS安全攻防（三）：使用Reveal分析他人app](#markdown-af03)
 
 * [iOS安全攻防（一）：Hack必备的命令与工具](#markdown-af04)
 
@@ -266,3 +266,49 @@ $ strings itunesstored2.sqlitedb
 
 
 ![](./images/4196_140211110054_1.png)
+
+
+### <a name="markdown-af03"></a>iOS安全攻防（三）：使用Reveal分析他人app
+
+
+####准备工作
+
+1）已越狱的设备，并且已安装了OpenSSH,MobileSubstrate等实用工具(Cydia源里安装)
+
+2）本地已安装了Reveal
+
+ 
+
+####操作步骤
+
+1）拷贝framework和dylib到越狱机
+
+scp -r /Applications/Reveal.app/Contents/SharedSupport/iOS-Libraries/Reveal.framework root@192.168.0.X:/System/Library/Frameworks
+
+scp /Applications/Reveal.app/Contents/SharedSupport/iOS-Libraries/libReveal.dylib root@192.168.0.X:/Library/MobileSubstrate/DynamicLibraries
+
+ 
+
+2）编辑libReveal.plist
+
+a.可以ssh登录到越狱机上，并且越狱机已安装了编辑器工具例如nano，在/Library/MobileSubstrate/DynamicLibraries/下创建文件libReveal.plist，指定app的Bundle，可以指定多个
+
+    {    
+        Filter = {   
+             Bundles = ("com.apple.AppStore");    
+        };    
+    }   
+
+ b.也可以在本地创建好libReveal.plist在scp到指定位置/Library/MobileSubstrate/DynamicLibraries/下
+
+ 
+
+3）重启越狱机
+
+a.执行 killall SpringBoard
+
+b.也可以重启设备
+
+然后就可以到Reveal看看别人的app怎么布局的了，苹果的appstore：
+
+![](./images/4196_140211110450_1.jpg)
