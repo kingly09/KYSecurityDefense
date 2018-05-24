@@ -23,6 +23,7 @@
 * [iOS安全攻防（十三）：数据擦除](#markdown-af13) 
 * [iOS安全攻防（十四）：Hack实战——支付宝app手势密码校验欺骗](#markdown-af14) 
 * [iOS安全攻防（十五）：使用iNalyzer分析应用程序](#markdown-af15) 
+* [iOS安全攻防（十六）：使用introspy追踪分析应用程序](#markdown-af16)
 
 
 
@@ -1570,3 +1571,90 @@ brew install doxygen graphviz
 
 
 ![](./images/232.png)
+
+
+### <a name="markdown-af16"></a>iOS安全攻防（十六）：使用introspy追踪分析应用程序
+
+
+如果你已阅读了《iOS安全攻防》系列专栏之前的文章，一定已经对静态以及运行时分析app有了一定的了解。
+
+ 
+
+我们可以借助的分析工具很多，工具和工具之间一般没有什么优劣比较性，完全看个人习惯什么擅长什么。
+
+ 
+
+多个工具多条路，那么本文将介绍追踪分析利器introspy。
+
+ 
+
+对应iOS系统版本，下载适用的introspy工具包：[introspy下载地址传送门](https://github.com/iSECPartners/Introspy-iOS/releases)
+
+ 
+
+下载后，将其拷贝到设备中，并执行安装命令：
+
+    # dpkg -i com.isecpartners.introspy-v0.4-iOS_7.deb  
+
+ 重启设备：
+
+    # killall SpringBoard   
+
+到设置中，就可以查看到instrospy的设置选项了
+
+
+
+![](./images/4196_140211125109_1.png)
+
+在Introspy-Apps中选择要跟踪的app名称。
+
+Instrospy-Settings则提供一些常规跟踪设置选项，默认是全部开启。
+
+
+![](./images/233.png)
+
+
+然后启动想要跟踪的应用程序，就可以直接查看log获取Instrospy为我们跟踪捕获的信息，这里以跟踪支付宝app为例。
+
+ 
+
+打开支付宝app，选择添加银行卡，随意添加一个卡号，然后点击下一步
+
+ 
+
+支付宝app反馈添加失败，该卡暂不支持，Instrospy捕获的信息也很清晰：
+
+ 
+
+追踪信息被保存为一个数据库introspy-com.alipay.iphoneclient.db，存放在：
+
+./private/var/mobile/Applications/4763A8A5-2E1D-4DC2-8376-6CB7A8B98728/Library/introspy-com.alipay.iphoneclient.db
+
+ 
+
+也可以借助Introspy-Analyzer在本地将该数据库解析成一个直观的report.html查看 
+
+ 
+
+Introspy-Analyzer [下载地址传送门](https://github.com/iSECPartners/Introspy-Analyzer)
+
+ 
+
+将introspy-com.alipay.iphoneclient.db拷贝到本地，执行：
+
+    python introspy.py -p ios --outdir Portal-introspy-html introspy-com.alipay.iphoneclient.db   
+
+ 
+
+就会生成一个 Portal-introspy-html  文件夹，该目录下有 report.html ，用浏览器打开:
+
+    open report.html    
+
+就可以清晰的查看追踪信息了，主要分为DataStorage、IPC、Misc、Network、Crypto六大类信息。
+
+ 
+
+举个例子，选择Crypto可以查看支付宝app采取了什么加密措施，如果你看过我之前的文章，一定会一眼就认出来手势密码的：
+
+![](./images/4196_140211125248_1.jpg)
+
