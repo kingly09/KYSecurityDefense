@@ -273,3 +273,90 @@
 
 
 本文原文是 [IOS Application security Part 2 – Getting class information of IOS apps](http://resources.infosecinstitute.com/ios-application-security-part-2-getting-class-information-of-ios-apps/)
+
+
+### <a name="markdown-aq03"></a>iOS应用程序安全(3)-理解Objective-C Runtime
+
+
+作者：Prateek Gianchandani
+
+译者：吴发伟
+
+原文网址：[http://resources.infosecinstitute.com/ios-application-security-part-3-understanding-the-objective-c-runtime/](http://resources.infosecinstitute.com/ios-application-security-part-3-understanding-the-objective-c-runtime/)
+
+版权声明：自由转载-非商用-保持署名
+
+#### 引言
+
+基本上所有的`iOS`应用都是用`Objective-C`编写的。所有这些应用都使用`Cocoa`，`Cocoa`在`Objective-C`上面，提供更高层次的`API`，使得`Mac`和`iOS`开发变得更容易一些。`Cocoa`也给应用提供了一个运行时环境。本文我们将着重理解`Objective-C`的运行时和关于内部函数如何运行的错综复杂的细节。这会让我们能够更深入的理解应用程序。
+
+
+#### Objective-C runtime
+
+`Objective-C`是一个面向运行时的语言。所以问题就是，什么是一个运行时语言？一个运行时语言就是在应用程序运行的时候来决定函数内部实现什么以及做出其它决定的语言。`Objective-C`是一个运行时语言吗？不是。它是一个面向运行时的语言，这意味着只要有可能，它就把做决定的时间从编译时和链接时延迟到这段代码真正执行的时候。正如前面指出的，`Cocoa`提供了`iOS`应用程序所需要的运行时环境。下面的截图来自苹果官方的文档，说的非常清楚。你可以到这阅读这个文档。
+
+
+
+
+我们来看看运行时库是否被工程引入了。理想情况下，它应该存在于每个iOS应用中。登录进设备，然后进入到应用程序目录。
+
+
+
+
+
+在命令行中输入`ls *`
+
+
+现在来看看`BADLAND iOS`应用程序。`BADLAND`是一个流行的`iOS`游戏。进入到`BadLand`的目录内，一旦进入到`BADLAND.app`目录内，对`BadLand`的二进制文件使用`otool`。
+
+
+可以看到引入了很多的`framework`以及库文件。`objc-runtime`也在其中，如图：
+
+
+这个运行时库使得在`Objective-C`中进行运行时操作变得可能。默认所有iOS应用都包含这个库。下面是对`Google Maps`应用使用`otool`得到的结果，你可以看到，它也包含了`Objective-C` 运行时库。
+
+
+#### 使用GDB进行运行时分析
+
+在本节，我们将使用`GDB`来观察程序的流程。第一件事情就是安装一个合适版本的`gdb`。从`Cydia`能获得的`gdb`版本并不能工作正常。因此，确保你从其他地方获得`gdb`，然后可以通过`sftp`安装到设备上。如图：
+
+
+确保你有能够运行的权限。
+
+
+为了能够挂钩（`hook`）进一个运行的进程，第一件事就是确保这个进程正在运行。在这里，我们将在`Google Maps`应用上测试。首先我们启动应用，然后获得它的进程id。确保它在前台运行。如下图所示，`Google Maps`的进程id是661。请注意这个id在你的设备上可能不同。
+
+
+现在，我们用`GDB` 挂钩这个进程。
+
+
+
+
+你可以看到，我们成功挂钩进入这个进程。目前我们可以忽略其中的警告。
+
+`Objective-C`是基于消息的，一旦一个消息被发出，`objc_msgSend`就会被调用。为了能够分析应用的运行流程，我将给一个最基本的调用下一个断点，例如`objc_msgSend`, 并且打印出$r0和$r1的值。从`$r0`我们可以知道这个方法对应的类是什么，从`$r1`我们可以知道`selector`。请注意，即使是这样，也可能会打印出太多的细节信息，因为`objc_msgSend`在消息发出的每个地方都会被调用。在接下来的文章里，我们将看看如何能够更有效使用它。因此，基本上只要断点断下来，我就将打印出`$r0`和`$r1`的值然后继续运行程序。下面是如何做的。
+
+
+
+输入 `c` 继续运行程序
+
+
+
+
+####Method Swizzling
+
+我们已经学到许多iOS应用都使用运行时环境、并且在运行时再做决定。正如其名，`method swizzling`是我们用来修改iOS程序的另一个武器，我们可以用它来调用我们自己的方法。在下一篇文章中，我们将详细介绍`Method Swizzling`。
+
+
+参考:
+
+[The Dark art of IOS Application hacking](http://www.slideshare.net/daniel_bilar/blackhat2012-zdziarskidarkarti-osapplicationhacking/)
+
+[The Objective-C runtime](http://www.slideshare.net/mobiledatasolutions/objectivec-runtime)
+
+
+本文原文是 [IOS Application security Part 3 – Understanding the Objective-C Runtime]()
+
+
+
+###  <a name="markdown-aq04"></a>iOS应用程序安全(4)-用Cycript进行运行时分析(Yahoo天气应用)
