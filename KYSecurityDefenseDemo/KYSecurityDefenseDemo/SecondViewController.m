@@ -3,7 +3,7 @@
 //  KYSecurityDefenseDemo
 //
 //  Created by kingly on 2018/5/18.
-//  Copyright © 2018年 Bambooclound Co., Ltd. All rights reserved.
+//  Copyright © 2018年 kingly. All rights reserved.
 //
 
 #import "SecondViewController.h"
