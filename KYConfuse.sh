@@ -5,11 +5,34 @@ echo  "Copyright (c) 2018 KYConfuse"
 echo  "Email:362108564@qq.com"
 echo  "Create:2018.05.28"
 echo "#######################################"
+
 echo "用户修改区－开始"
 #要替换的源代码所在的根目录,该脚本文件与根目录处于同级文件夹
-ROOTFOLDER="KYSecurityDefenseDemo"
+
+ROOTFOLDER="BCEAccountAPP"
+
+echo "当前工程名："$ROOTFOLDER
+
+BUILD_VERSION="1.2.1"
+
+echo "当前版本："$BUILD_VERSION
+
 #要排除的文件夹,例如demo中用到的第三方库AFNetworking，pods的第三方库等
-EXCLUDE_DIR=" --exclude-dir=Pods --exclude-dir=buildAppstore --exclude-dir=Carthage --exclude-dir=Images.xcassets  --exclude-dir=Assets.xcassets  --exclude-dir=Certificates --exclude-dir=fastlane --exclude-dir=fastlanelog"
+EXCLUDE_DIR=" --exclude-dir=Pods --exclude-dir=buildAppstore --exclude-dir=Carthage --exclude-dir=Images.xcassets  --exclude-dir=Assets.xcassets  --exclude-dir=Certificates --exclude-dir=fastlane --exclude-dir=fastlanelog --exclude-dir=${ROOTFOLDER}Tests --exclude-dir=${ROOTFOLDER}Tests"
+
+echo "要排除的文件夹 "${EXCLUDE_DIR}
+
+ROOT_NEW_DIR=$ROOTFOLDER"_"$BUILD_VERSION
+
+if [ ! -d $ROOT_NEW_DIR ]; then
+mkdir -p -m 755 $ROOT_NEW_DIR
+echo "创建工程目录 "$ROOT_NEW_DIR" 成功"
+fi
+
+cp  -Rf  ${ROOTFOLDER}/*  ${ROOT_NEW_DIR}/
+
+ROOTFOLDER=$ROOTFOLDER"_"$BUILD_VERSION
+
 echo "用户修改区－结束"
 
 #自定义的保留关键字,相当与白名单，添加到该文件中，一行一个，加入该文件的关键字将不被混淆;如工程中自定义的文件夹名称
