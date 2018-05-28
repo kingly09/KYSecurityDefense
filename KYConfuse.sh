@@ -8,8 +8,8 @@ echo "#######################################"
 echo "用户修改区－开始"
 #要替换的源代码所在的根目录,该脚本文件与根目录处于同级文件夹
 ROOTFOLDER ="KYSecurityDefenseDemo"
-#要排除的文件夹,例如demo中用到的第三方库AFNetworking等
-EXCLUDE_DIR ="--exclude-dir=Pods --exclude-dir=buildAppstore --exclude-dir=Carthage --exclude-dir=Images.xcassets  --exclude-dir=Certificates --exclude-dir=fastlane --exclude-dir=fastlanelog --exclude-dir=BCEAccountAPPTests --exclude-dir=BCEAccountAPPUITests  --exclude-dir=Vendor"
+#要排除的文件夹,例如demo中用到的第三方库AFNetworking，pods的第三方库等
+EXCLUDE_DIR ="--exclude-dir=Pods --exclude-dir=buildAppstore --exclude-dir=Carthage --exclude-dir=Images.xcassets  --exclude-dir=Assets.xcassets  --exclude-dir=Certificates --exclude-dir=fastlane --exclude-dir=fastlanelog "
 echo "用户修改区－结束"
 
 #自定义的保留关键字,相当与白名单，添加到该文件中，一行一个，加入该文件的关键字将不被混淆;如工程中自定义的文件夹名称
