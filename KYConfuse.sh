@@ -9,7 +9,7 @@ echo "#######################################"
 echo "用户修改区－开始"
 #要替换的源代码所在的根目录,该脚本文件与根目录处于同级文件夹
 
-ROOTFOLDER="BCEAccountAPP"
+ROOTFOLDER="KYSecurityDefenseDemo"
 
 echo "当前工程名："$ROOTFOLDER
 
