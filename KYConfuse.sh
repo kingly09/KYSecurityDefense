@@ -13,7 +13,7 @@ ROOTFOLDER="KYSecurityDefenseDemo"
 
 echo "当前工程名："$ROOTFOLDER
 
-BUILD_VERSION="1.2.1"
+BUILD_VERSION="1.2.2"
 
 echo "当前版本："$BUILD_VERSION
 
